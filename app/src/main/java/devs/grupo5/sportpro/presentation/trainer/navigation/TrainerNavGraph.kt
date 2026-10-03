@@ -28,6 +28,7 @@ import devs.grupo5.sportpro.presentation.trainer.players.PlayerResponsibleScreen
 import devs.grupo5.sportpro.presentation.trainer.players.PlayerSportDataScreen
 import devs.grupo5.sportpro.presentation.trainer.players.PlayerViewModel
 import devs.grupo5.sportpro.presentation.trainer.players.PlayersScreen
+import devs.grupo5.sportpro.presentation.trainer.profile.ProfileScreen
 import devs.grupo5.sportpro.presentation.trainer.teams.CreateTeamScreen
 import devs.grupo5.sportpro.presentation.trainer.teams.TeamDetailScreen
 import devs.grupo5.sportpro.presentation.trainer.teams.TeamViewModel
@@ -59,6 +60,8 @@ object TrainerRoutes {
 
     const val COMMUNITY = "trainer_community"
     const val CREATE_POST = "create_post"
+
+    const val PROFILE = "trainer_profile"
 }
 
 @Composable
@@ -75,6 +78,7 @@ fun TrainerMainContainerScreen(
         currentRoute.startsWith(TrainerRoutes.TRAINING) || currentRoute.startsWith("training_") || currentRoute == TrainerRoutes.CREATE_TRAINING -> TrainerTab.TRAINING
         currentRoute.startsWith(TrainerRoutes.MATCHES) || currentRoute == TrainerRoutes.CREATE_MATCH -> TrainerTab.MATCHES
         currentRoute.startsWith(TrainerRoutes.COMMUNITY) || currentRoute == TrainerRoutes.CREATE_POST -> TrainerTab.COMMUNITY
+        currentRoute.startsWith(TrainerRoutes.PROFILE) -> TrainerTab.PROFILE
         else -> TrainerTab.DASHBOARD
     }
 
@@ -239,6 +243,13 @@ fun TrainerMainContainerScreen(
                         viewModel = communityViewModel,
                         onBackClick = { navController.popBackStack() },
                         onPostCreated = { navController.popBackStack() }
+                    )
+                }
+
+                // Mi Perfil (HU-005)
+                composable(TrainerRoutes.PROFILE) {
+                    ProfileScreen(
+                        onBackClick = { navController.popBackStack() }
                     )
                 }
             }
