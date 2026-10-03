@@ -4,7 +4,6 @@
 - Denzel Flores
 - Braulio Coz
 - Erick Cochachi
-- Manuel Saavedra
 
 ## Links importantes del proyecto:
 - Documento de HU: https://docs.google.com/document/d/1yPK4SmyNyfRXlXsBHD0UGKM7jV2KhlSYXwj_MsRVyLA/edit?usp=sharing
