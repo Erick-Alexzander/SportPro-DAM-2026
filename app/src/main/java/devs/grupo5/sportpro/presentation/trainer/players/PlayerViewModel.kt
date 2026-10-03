@@ -2,6 +2,7 @@ package devs.grupo5.sportpro.presentation.trainer.players
 
 import androidx.lifecycle.ViewModel
 import devs.grupo5.sportpro.data.model.Player
+import devs.grupo5.sportpro.data.repository.FirebasePlayerRepository
 import devs.grupo5.sportpro.data.repository.MockPlayerRepository
 import devs.grupo5.sportpro.data.repository.PlayerRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -9,7 +10,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 class PlayerViewModel(
-    private val playerRepository: PlayerRepository = MockPlayerRepository.instance
+    private val playerRepository: PlayerRepository = FirebasePlayerRepository.instance
 ) : ViewModel() {
 
     val players: StateFlow<List<Player>> = playerRepository.players

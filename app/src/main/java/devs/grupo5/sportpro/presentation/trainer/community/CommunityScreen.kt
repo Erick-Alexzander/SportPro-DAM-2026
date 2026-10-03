@@ -20,7 +20,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.ChatBubbleOutline
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
@@ -131,11 +130,7 @@ fun PostCard(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
-            .border(
-                1.dp,
-                if (post.isAiSummary) SportProGreen.copy(alpha = 0.5f) else SportProCardBorder,
-                RoundedCornerShape(16.dp)
-            ),
+            .border(1.dp, SportProCardBorder, RoundedCornerShape(16.dp)),
         colors = CardDefaults.cardColors(containerColor = SportProCardBackground)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -163,58 +158,6 @@ fun PostCard(
                 }
 
                 CategoryChip(category = post.category)
-            }
-
-            // Match Summary Highlight Header if present
-            if (post.matchTitle != null) {
-                Spacer(modifier = Modifier.height(12.dp))
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(SportProDarkBackground)
-                        .padding(12.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.AutoAwesome,
-                                contentDescription = null,
-                                tint = SportProGreen,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Column {
-                                Text(
-                                    text = post.matchTitle,
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = SportProTextPrimary
-                                )
-                                if (post.matchCategory != null) {
-                                    Text(
-                                        text = "Categoría ${post.matchCategory}",
-                                        fontSize = 11.sp,
-                                        color = SportProTextSecondary
-                                    )
-                                }
-                            }
-                        }
-
-                        if (post.matchScore != null) {
-                            Text(
-                                text = post.matchScore,
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                color = SportProGreen
-                            )
-                        }
-                    }
-                }
             }
 
             Spacer(modifier = Modifier.height(12.dp))

@@ -24,6 +24,9 @@ class MockAuthRepository private constructor() : AuthRepository {
     private val _currentUser = MutableStateFlow<UserProfile?>(null)
     override val currentUser: StateFlow<UserProfile?> = _currentUser.asStateFlow()
 
+    private val _isSessionChecked = MutableStateFlow(true)
+    override val isSessionChecked: StateFlow<Boolean> = _isSessionChecked.asStateFlow()
+
     override val isEmailRegistered: (String) -> Boolean = { email ->
         initialUsers.containsKey(email.lowercase().trim())
     }

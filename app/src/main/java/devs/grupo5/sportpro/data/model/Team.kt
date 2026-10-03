@@ -7,5 +7,7 @@ data class Team(
     val description: String = "",
     val coachName: String = "",
     val playerIds: List<String> = emptyList(),
-    val playerCount: Int = playerIds.size
+    val playerCount: Int = playerIds.size,
+    val trainerId: String = ""
 )
+

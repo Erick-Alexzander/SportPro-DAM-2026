@@ -1,6 +1,21 @@
 package devs.grupo5.sportpro.presentation.auth
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
@@ -9,6 +24,8 @@ import androidx.navigation.compose.rememberNavController
 import devs.grupo5.sportpro.data.model.UserRole
 import devs.grupo5.sportpro.presentation.trainer.navigation.TrainerMainContainerScreen
 import devs.grupo5.sportpro.ui.screens.RegisterScreen
+import devs.grupo5.sportpro.ui.theme.BackgroundDark
+import devs.grupo5.sportpro.ui.theme.NeonGreen
 
 object AuthRoutes {
     const val WELCOME = "welcome"
@@ -26,9 +43,45 @@ fun AuthNavGraph(
     navController: NavHostController = rememberNavController(),
     authViewModel: AuthViewModel = viewModel()
 ) {
+    val isSessionChecked by authViewModel.isSessionChecked.collectAsState()
+    val currentUser by authViewModel.currentUser.collectAsState()
+
+    if (!isSessionChecked) {
+        // Initial Loading Splash Screen while checking Firebase session
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(BackgroundDark),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    text = "SportPro",
+                    fontSize = 32.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = NeonGreen
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                CircularProgressIndicator(
+                    color = NeonGreen,
+                    strokeWidth = 3.dp
+                )
+            }
+        }
+        return
+    }
+
+    val startDestination = when (currentUser?.role) {
+        UserRole.TRAINER -> AuthRoutes.TRAINER_MODULE
+        UserRole.PLAYER -> AuthRoutes.PLAYER_MODULE
+        UserRole.PARENT -> AuthRoutes.PARENT_MODULE
+        UserRole.ADMIN -> AuthRoutes.PLAYER_MODULE
+        null -> AuthRoutes.WELCOME
+    }
+
     NavHost(
         navController = navController,
-        startDestination = AuthRoutes.WELCOME
+        startDestination = startDestination
     ) {
         // Welcome Screen
         composable(AuthRoutes.WELCOME) {
@@ -90,9 +143,16 @@ fun AuthNavGraph(
             )
         }
 
-        // Trainer Module (hosts existing TrainerMainContainerScreen directly)
+        // Trainer Module
         composable(AuthRoutes.TRAINER_MODULE) {
-            TrainerMainContainerScreen()
+            TrainerMainContainerScreen(
+                onLogoutClick = {
+                    authViewModel.logout()
+                    navController.navigate(AuthRoutes.WELCOME) {
+                        popUpTo(0) { inclusive = true }
+                    }
+                }
+            )
         }
 
         // Player Placeholder

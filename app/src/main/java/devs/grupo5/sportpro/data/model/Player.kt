@@ -16,5 +16,8 @@ data class Player(
     val parentName: String = "",
     val parentRelation: String = "",
     val parentPhone: String = "",
-    val emergencyPhone: String = ""
+    val emergencyPhone: String = "",
+    val trainerId: String = "",
+    val teamId: String = ""
 )
+

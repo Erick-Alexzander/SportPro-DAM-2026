@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import devs.grupo5.sportpro.data.model.UserProfile
 import devs.grupo5.sportpro.data.model.UserRole
 import devs.grupo5.sportpro.data.repository.AuthRepository
+import devs.grupo5.sportpro.data.repository.FirebaseAuthRepository
 import devs.grupo5.sportpro.data.repository.MockAuthRepository
 import devs.grupo5.sportpro.ui.screens.RegisterFormData
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -13,10 +14,11 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 class AuthViewModel(
-    private val authRepository: AuthRepository = MockAuthRepository.instance
+    private val authRepository: AuthRepository = FirebaseAuthRepository.instance
 ) : ViewModel() {
 
     val currentUser: StateFlow<UserProfile?> = authRepository.currentUser
+    val isSessionChecked: StateFlow<Boolean> = authRepository.isSessionChecked
 
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()

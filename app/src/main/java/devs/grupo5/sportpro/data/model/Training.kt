@@ -18,5 +18,7 @@ data class Training(
     val objective: String = "",
     val exercises: List<Exercise> = emptyList(),
     val attendees: List<String> = emptyList(), // IDs de jugadores presentes
-    val status: String = "Programado" // "Programado", "En Curso", "Finalizado"
+    val status: String = "Programado", // "Programado", "En Curso", "Finalizado"
+    val trainerId: String = ""
 )
+

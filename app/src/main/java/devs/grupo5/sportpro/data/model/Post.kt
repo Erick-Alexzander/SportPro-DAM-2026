@@ -10,8 +10,6 @@ data class Post(
     val likesCount: Int = 0,
     val commentsCount: Int = 0,
     val isLiked: Boolean = false,
-    val matchTitle: String? = null,
-    val matchScore: String? = null,
-    val matchCategory: String? = null,
-    val isAiSummary: Boolean = false
+    val trainerId: String = ""
 )
+

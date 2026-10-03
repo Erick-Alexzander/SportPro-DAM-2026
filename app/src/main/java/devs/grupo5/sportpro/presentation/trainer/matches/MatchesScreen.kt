@@ -53,8 +53,7 @@ import devs.grupo5.sportpro.presentation.trainer.theme.SportProWarning
 @Composable
 fun MatchesScreen(
     viewModel: MatchViewModel = viewModel(),
-    onCreateMatchClick: () -> Unit = {},
-    onMatchClick: (Match) -> Unit = {}
+    onCreateMatchClick: () -> Unit = {}
 ) {
     val matches by viewModel.matches.collectAsState()
     val selectedStatus by viewModel.selectedStatus.collectAsState()
@@ -156,7 +155,7 @@ fun MatchesScreen(
                     verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
                     items(filteredMatches, key = { it.id }) { match ->
-                        MatchCard(match = match, onClick = { onMatchClick(match) })
+                        MatchCard(match = match)
                     }
                 }
             }
@@ -165,16 +164,12 @@ fun MatchesScreen(
 }
 
 @Composable
-fun MatchCard(
-    match: Match,
-    onClick: () -> Unit = {}
-) {
+fun MatchCard(match: Match) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
-            .border(1.dp, SportProCardBorder, RoundedCornerShape(16.dp))
-            .clickable { onClick() },
+            .border(1.dp, SportProCardBorder, RoundedCornerShape(16.dp)),
         colors = CardDefaults.cardColors(containerColor = SportProCardBackground)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {

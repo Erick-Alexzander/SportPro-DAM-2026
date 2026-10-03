@@ -20,19 +20,14 @@ import devs.grupo5.sportpro.presentation.trainer.components.TrainerBottomNavigat
 import devs.grupo5.sportpro.presentation.trainer.components.TrainerTab
 import devs.grupo5.sportpro.presentation.trainer.dashboard.TrainerDashboardScreen
 import devs.grupo5.sportpro.presentation.trainer.dashboard.TrainerDashboardViewModel
-import devs.grupo5.sportpro.presentation.trainer.matches.AiSummaryScreen
 import devs.grupo5.sportpro.presentation.trainer.matches.CreateMatchScreen
-import devs.grupo5.sportpro.presentation.trainer.matches.LiveMatchScreen
-import devs.grupo5.sportpro.presentation.trainer.matches.MatchDetailScreen
 import devs.grupo5.sportpro.presentation.trainer.matches.MatchViewModel
 import devs.grupo5.sportpro.presentation.trainer.matches.MatchesScreen
-import devs.grupo5.sportpro.presentation.trainer.matches.PublishCommunityScreen
 import devs.grupo5.sportpro.presentation.trainer.players.PlayerPersonalDataScreen
 import devs.grupo5.sportpro.presentation.trainer.players.PlayerResponsibleScreen
 import devs.grupo5.sportpro.presentation.trainer.players.PlayerSportDataScreen
 import devs.grupo5.sportpro.presentation.trainer.players.PlayerViewModel
 import devs.grupo5.sportpro.presentation.trainer.players.PlayersScreen
-import devs.grupo5.sportpro.presentation.trainer.profile.ProfileScreen
 import devs.grupo5.sportpro.presentation.trainer.teams.CreateTeamScreen
 import devs.grupo5.sportpro.presentation.trainer.teams.TeamDetailScreen
 import devs.grupo5.sportpro.presentation.trainer.teams.TeamViewModel
@@ -61,20 +56,15 @@ object TrainerRoutes {
 
     const val MATCHES = "trainer_matches"
     const val CREATE_MATCH = "create_match"
-    const val LIVE_MATCH = "live_match/{matchId}"
-    const val MATCH_DETAIL = "match_detail/{matchId}"
-    const val AI_SUMMARY = "ai_summary/{matchId}"
-    const val PUBLISH_COMMUNITY = "publish_community/{matchId}"
 
     const val COMMUNITY = "trainer_community"
     const val CREATE_POST = "create_post"
-
-    const val PROFILE = "trainer_profile"
 }
 
 @Composable
 fun TrainerMainContainerScreen(
-    navController: NavHostController = rememberNavController()
+    navController: NavHostController = rememberNavController(),
+    onLogoutClick: () -> Unit = {}
 ) {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route ?: TrainerRoutes.DASHBOARD
@@ -84,9 +74,8 @@ fun TrainerMainContainerScreen(
         currentRoute.startsWith(TrainerRoutes.TEAMS) || currentRoute.startsWith("team_detail") || currentRoute == TrainerRoutes.CREATE_TEAM -> TrainerTab.TEAMS
         currentRoute.startsWith(TrainerRoutes.PLAYERS) || currentRoute.startsWith("player_") -> TrainerTab.TEAMS
         currentRoute.startsWith(TrainerRoutes.TRAINING) || currentRoute.startsWith("training_") || currentRoute == TrainerRoutes.CREATE_TRAINING -> TrainerTab.TRAINING
-        currentRoute.startsWith(TrainerRoutes.MATCHES) || currentRoute.startsWith("live_match") || currentRoute.startsWith("match_detail") || currentRoute.startsWith("ai_summary") || currentRoute.startsWith("publish_community") || currentRoute == TrainerRoutes.CREATE_MATCH -> TrainerTab.MATCHES
+        currentRoute.startsWith(TrainerRoutes.MATCHES) || currentRoute == TrainerRoutes.CREATE_MATCH -> TrainerTab.MATCHES
         currentRoute.startsWith(TrainerRoutes.COMMUNITY) || currentRoute == TrainerRoutes.CREATE_POST -> TrainerTab.COMMUNITY
-        currentRoute.startsWith(TrainerRoutes.PROFILE) -> TrainerTab.PROFILE
         else -> TrainerTab.DASHBOARD
     }
 
@@ -126,7 +115,8 @@ fun TrainerMainContainerScreen(
                         onNavigateToTrainings = { navController.navigate(TrainerRoutes.TRAINING) },
                         onNavigateToMatches = { navController.navigate(TrainerRoutes.MATCHES) },
                         onNavigateToTeams = { navController.navigate(TrainerRoutes.TEAMS) },
-                        onNavigateToCommunity = { navController.navigate(TrainerRoutes.COMMUNITY) }
+                        onNavigateToCommunity = { navController.navigate(TrainerRoutes.COMMUNITY) },
+                        onLogoutClick = onLogoutClick
                     )
                 }
 
@@ -226,14 +216,7 @@ fun TrainerMainContainerScreen(
                 composable(TrainerRoutes.MATCHES) {
                     MatchesScreen(
                         viewModel = matchViewModel,
-                        onCreateMatchClick = { navController.navigate(TrainerRoutes.CREATE_MATCH) },
-                        onMatchClick = { match ->
-                            if (match.status.equals("En vivo", ignoreCase = true)) {
-                                navController.navigate("live_match/${match.id}")
-                            } else {
-                                navController.navigate("match_detail/${match.id}")
-                            }
-                        }
+                        onCreateMatchClick = { navController.navigate(TrainerRoutes.CREATE_MATCH) }
                     )
                 }
 
@@ -242,76 +225,6 @@ fun TrainerMainContainerScreen(
                         viewModel = matchViewModel,
                         onBackClick = { navController.popBackStack() },
                         onMatchRegistered = { navController.popBackStack() }
-                    )
-                }
-
-                composable(
-                    route = TrainerRoutes.LIVE_MATCH,
-                    arguments = listOf(navArgument("matchId") { type = NavType.StringType })
-                ) { backStackEntry ->
-                    val matchId = backStackEntry.arguments?.getString("matchId") ?: ""
-                    LiveMatchScreen(
-                        matchId = matchId,
-                        viewModel = matchViewModel,
-                        onBackClick = { navController.popBackStack() },
-                        onFinishMatchClick = { id ->
-                            navController.navigate("match_detail/$id") {
-                                popUpTo(TrainerRoutes.MATCHES)
-                            }
-                        }
-                    )
-                }
-
-                composable(
-                    route = TrainerRoutes.MATCH_DETAIL,
-                    arguments = listOf(navArgument("matchId") { type = NavType.StringType })
-                ) { backStackEntry ->
-                    val matchId = backStackEntry.arguments?.getString("matchId") ?: ""
-                    MatchDetailScreen(
-                        matchId = matchId,
-                        viewModel = matchViewModel,
-                        onBackClick = { navController.popBackStack() },
-                        onAiSummaryClick = { id ->
-                            navController.navigate("ai_summary/$id")
-                        }
-                    )
-                }
-
-                composable(
-                    route = TrainerRoutes.AI_SUMMARY,
-                    arguments = listOf(navArgument("matchId") { type = NavType.StringType })
-                ) { backStackEntry ->
-                    val matchId = backStackEntry.arguments?.getString("matchId") ?: ""
-                    AiSummaryScreen(
-                        matchId = matchId,
-                        viewModel = matchViewModel,
-                        onBackClick = { navController.popBackStack() },
-                        onViewMatchClick = { navController.popBackStack() },
-                        onGoToMatchesClick = {
-                            navController.navigate(TrainerRoutes.MATCHES) {
-                                popUpTo(TrainerRoutes.DASHBOARD)
-                            }
-                        },
-                        onPublishToCommunityClick = { id ->
-                            navController.navigate("publish_community/$id")
-                        }
-                    )
-                }
-
-                composable(
-                    route = TrainerRoutes.PUBLISH_COMMUNITY,
-                    arguments = listOf(navArgument("matchId") { type = NavType.StringType })
-                ) { backStackEntry ->
-                    val matchId = backStackEntry.arguments?.getString("matchId") ?: ""
-                    PublishCommunityScreen(
-                        matchId = matchId,
-                        viewModel = matchViewModel,
-                        onBackClick = { navController.popBackStack() },
-                        onNavigateToCommunity = {
-                            navController.navigate(TrainerRoutes.COMMUNITY) {
-                                popUpTo(TrainerRoutes.DASHBOARD)
-                            }
-                        }
                     )
                 }
 
@@ -328,13 +241,6 @@ fun TrainerMainContainerScreen(
                         viewModel = communityViewModel,
                         onBackClick = { navController.popBackStack() },
                         onPostCreated = { navController.popBackStack() }
-                    )
-                }
-
-                // Mi Perfil (HU-005)
-                composable(TrainerRoutes.PROFILE) {
-                    ProfileScreen(
-                        onBackClick = { navController.popBackStack() }
                     )
                 }
             }

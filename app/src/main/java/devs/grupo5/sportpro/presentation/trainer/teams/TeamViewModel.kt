@@ -5,6 +5,10 @@ import devs.grupo5.sportpro.data.model.Match
 import devs.grupo5.sportpro.data.model.Player
 import devs.grupo5.sportpro.data.model.Team
 import devs.grupo5.sportpro.data.model.Training
+import devs.grupo5.sportpro.data.repository.FirebaseMatchRepository
+import devs.grupo5.sportpro.data.repository.FirebasePlayerRepository
+import devs.grupo5.sportpro.data.repository.FirebaseTeamRepository
+import devs.grupo5.sportpro.data.repository.FirebaseTrainingRepository
 import devs.grupo5.sportpro.data.repository.MatchRepository
 import devs.grupo5.sportpro.data.repository.MockMatchRepository
 import devs.grupo5.sportpro.data.repository.MockPlayerRepository
@@ -16,10 +20,10 @@ import devs.grupo5.sportpro.data.repository.TrainingRepository
 import kotlinx.coroutines.flow.StateFlow
 
 class TeamViewModel(
-    private val teamRepository: TeamRepository = MockTeamRepository.instance,
-    private val playerRepository: PlayerRepository = MockPlayerRepository.instance,
-    private val trainingRepository: TrainingRepository = MockTrainingRepository.instance,
-    private val matchRepository: MatchRepository = MockMatchRepository.instance
+    private val teamRepository: TeamRepository = FirebaseTeamRepository.instance,
+    private val playerRepository: PlayerRepository = FirebasePlayerRepository.instance,
+    private val trainingRepository: TrainingRepository = FirebaseTrainingRepository.instance,
+    private val matchRepository: MatchRepository = FirebaseMatchRepository.instance
 ) : ViewModel() {
 
     val teams: StateFlow<List<Team>> = teamRepository.teams
