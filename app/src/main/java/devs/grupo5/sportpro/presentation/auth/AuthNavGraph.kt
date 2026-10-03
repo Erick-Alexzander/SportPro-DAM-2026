@@ -92,7 +92,15 @@ fun AuthNavGraph(
 
         // Trainer Module (hosts existing TrainerMainContainerScreen directly)
         composable(AuthRoutes.TRAINER_MODULE) {
-            TrainerMainContainerScreen()
+            TrainerMainContainerScreen(
+                authViewModel = authViewModel,
+                onLogoutSuccess = {
+                    authViewModel.logout()
+                    navController.navigate(AuthRoutes.WELCOME) {
+                        popUpTo(0) { inclusive = true }
+                    }
+                }
+            )
         }
 
         // Player Placeholder

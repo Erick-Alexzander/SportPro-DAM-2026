@@ -11,9 +11,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -42,8 +44,10 @@ import devs.grupo5.sportpro.presentation.trainer.theme.SportProCardBorder
 import devs.grupo5.sportpro.presentation.trainer.theme.SportProDarkBackground
 import devs.grupo5.sportpro.presentation.trainer.theme.SportProGreen
 import devs.grupo5.sportpro.presentation.trainer.theme.SportProGreenContainer
+import devs.grupo5.sportpro.presentation.trainer.theme.SportProTextMuted
 import devs.grupo5.sportpro.presentation.trainer.theme.SportProTextPrimary
 import devs.grupo5.sportpro.presentation.trainer.theme.SportProTextSecondary
+import devs.grupo5.sportpro.presentation.trainer.theme.SportProWarning
 
 @Composable
 fun PlayerResponsibleScreen(
@@ -56,173 +60,248 @@ fun PlayerResponsibleScreen(
     var parentPhone by remember { mutableStateOf(viewModel.registrationDraft.parentPhone) }
     var emergencyPhone by remember { mutableStateOf(viewModel.registrationDraft.emergencyPhone) }
 
-    Column(
+    val age = viewModel.registrationDraft.age
+    val isMinor = age < 18
+
+    val isValid = if (isMinor) {
+        parentName.isNotBlank() && parentRelation.isNotBlank() && parentPhone.isNotBlank() && emergencyPhone.isNotBlank()
+    } else {
+        true // Adult player: responsible fields are optional
+    }
+
+    LazyColumn(
         modifier = Modifier
             .fillMaxSize()
             .background(SportProDarkBackground)
             .padding(16.dp)
     ) {
         // Top Bar
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            IconButton(onClick = onBackClick) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "Volver",
-                    tint = SportProTextPrimary
-                )
+        item {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                IconButton(onClick = onBackClick) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Volver",
+                        tint = SportProTextPrimary
+                    )
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                Column {
+                    Text(
+                        text = "Paso 3 de 3",
+                        fontSize = 12.sp,
+                        color = SportProGreen,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "Responsable y Contacto",
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = SportProTextPrimary
+                    )
+                }
             }
-            Spacer(modifier = Modifier.width(8.dp))
-            Column {
+
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+
+        // Privacy Data Protection Card
+        item {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .border(1.dp, SportProGreen.copy(alpha = 0.3f), RoundedCornerShape(14.dp)),
+                colors = CardDefaults.cardColors(containerColor = SportProGreenContainer)
+            ) {
+                Row(
+                    modifier = Modifier.padding(14.dp),
+                    verticalAlignment = Alignment.Top
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Security,
+                        contentDescription = "Protección de datos",
+                        tint = SportProGreen,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column {
+                        Text(
+                            text = "Protección de datos menores",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = SportProGreen
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "Los datos personales, de contacto, emergencia y físicos no serán públicos. Solo el administrador y el apoderado responsable podrán consultarlos.",
+                            fontSize = 12.sp,
+                            color = SportProTextSecondary,
+                            lineHeight = 17.sp
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+
+        // Minor vs Adult Banner
+        item {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .border(
+                        1.dp,
+                        if (isMinor) SportProWarning else SportProGreenContainer,
+                        RoundedCornerShape(12.dp)
+                    ),
+                colors = CardDefaults.cardColors(containerColor = SportProCardBackground)
+            ) {
+                Row(
+                    modifier = Modifier.padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Info,
+                        contentDescription = null,
+                        tint = if (isMinor) SportProWarning else SportProGreen,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text(
+                        text = if (isMinor)
+                            "Jugador menor de edad ($age años) — La información del apoderado responsable es OBLIGATORIA."
+                        else
+                            "Jugador mayor de edad ($age años) — No se exige apoderado. Campos opcionales.",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isMinor) SportProWarning else SportProGreen
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+
+        // Fields
+        item {
+            OutlinedTextField(
+                value = parentName,
+                onValueChange = { parentName = it },
+                label = { Text(if (isMinor) "Padre / Apoderado responsable *" else "Padre / Apoderado (opcional)", color = SportProTextSecondary) },
+                singleLine = true,
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedContainerColor = SportProCardBackground,
+                    unfocusedContainerColor = SportProCardBackground,
+                    focusedBorderColor = SportProGreen,
+                    unfocusedBorderColor = SportProCardBorder,
+                    focusedTextColor = SportProTextPrimary,
+                    unfocusedTextColor = SportProTextPrimary
+                ),
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp)
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            OutlinedTextField(
+                value = parentRelation,
+                onValueChange = { parentRelation = it },
+                label = { Text(if (isMinor) "Relación con el menor * (ej. Padre, Madre)" else "Relación (opcional)", color = SportProTextSecondary) },
+                singleLine = true,
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedContainerColor = SportProCardBackground,
+                    unfocusedContainerColor = SportProCardBackground,
+                    focusedBorderColor = SportProGreen,
+                    unfocusedBorderColor = SportProCardBorder,
+                    focusedTextColor = SportProTextPrimary,
+                    unfocusedTextColor = SportProTextPrimary
+                ),
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp)
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            OutlinedTextField(
+                value = parentPhone,
+                onValueChange = { parentPhone = it },
+                label = { Text(if (isMinor) "Teléfono de contacto *" else "Teléfono de contacto (opcional)", color = SportProTextSecondary) },
+                singleLine = true,
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedContainerColor = SportProCardBackground,
+                    unfocusedContainerColor = SportProCardBackground,
+                    focusedBorderColor = SportProGreen,
+                    unfocusedBorderColor = SportProCardBorder,
+                    focusedTextColor = SportProTextPrimary,
+                    unfocusedTextColor = SportProTextPrimary
+                ),
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp)
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            OutlinedTextField(
+                value = emergencyPhone,
+                onValueChange = { emergencyPhone = it },
+                label = { Text(if (isMinor) "Teléfono de emergencia *" else "Teléfono de emergencia (opcional)", color = SportProTextSecondary) },
+                singleLine = true,
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedContainerColor = SportProCardBackground,
+                    unfocusedContainerColor = SportProCardBackground,
+                    focusedBorderColor = SportProGreen,
+                    unfocusedBorderColor = SportProCardBorder,
+                    focusedTextColor = SportProTextPrimary,
+                    unfocusedTextColor = SportProTextPrimary
+                ),
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp)
+            )
+
+            Spacer(modifier = Modifier.height(28.dp))
+        }
+
+        // Register Button
+        item {
+            Button(
+                onClick = {
+                    if (isValid) {
+                        viewModel.updateResponsibleData(
+                            parentPhone = parentPhone,
+                            parentName = parentName,
+                            parentRelation = parentRelation,
+                            emergencyPhone = emergencyPhone
+                        )
+                        viewModel.registerPlayer()
+                        onPlayerRegistered()
+                    }
+                },
+                enabled = isValid,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(50.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = SportProGreen,
+                    contentColor = Color.Black,
+                    disabledContainerColor = SportProCardBorder,
+                    disabledContentColor = SportProTextMuted
+                ),
+                shape = RoundedCornerShape(12.dp)
+            ) {
                 Text(
-                    text = "Paso 3 de 3",
-                    fontSize = 12.sp,
-                    color = SportProGreen,
+                    text = "Registrar jugador",
+                    fontSize = 16.sp,
                     fontWeight = FontWeight.Bold
                 )
-                Text(
-                    text = "Responsable y Contacto",
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = SportProTextPrimary
-                )
             }
-        }
 
-        Spacer(modifier = Modifier.height(20.dp))
-
-        OutlinedTextField(
-            value = parentName,
-            onValueChange = { parentName = it },
-            label = { Text("Padre / Apoderado responsable", color = SportProTextSecondary) },
-            singleLine = true,
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedContainerColor = SportProCardBackground,
-                unfocusedContainerColor = SportProCardBackground,
-                focusedBorderColor = SportProGreen,
-                unfocusedBorderColor = SportProCardBorder,
-                focusedTextColor = SportProTextPrimary,
-                unfocusedTextColor = SportProTextPrimary
-            ),
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp)
-        )
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        OutlinedTextField(
-            value = parentRelation,
-            onValueChange = { parentRelation = it },
-            label = { Text("Relación con el menor (ej. Padre, Madre)", color = SportProTextSecondary) },
-            singleLine = true,
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedContainerColor = SportProCardBackground,
-                unfocusedContainerColor = SportProCardBackground,
-                focusedBorderColor = SportProGreen,
-                unfocusedBorderColor = SportProCardBorder,
-                focusedTextColor = SportProTextPrimary,
-                unfocusedTextColor = SportProTextPrimary
-            ),
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp)
-        )
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        OutlinedTextField(
-            value = parentPhone,
-            onValueChange = { parentPhone = it },
-            label = { Text("Teléfono de contacto", color = SportProTextSecondary) },
-            singleLine = true,
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedContainerColor = SportProCardBackground,
-                unfocusedContainerColor = SportProCardBackground,
-                focusedBorderColor = SportProGreen,
-                unfocusedBorderColor = SportProCardBorder,
-                focusedTextColor = SportProTextPrimary,
-                unfocusedTextColor = SportProTextPrimary
-            ),
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp)
-        )
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        OutlinedTextField(
-            value = emergencyPhone,
-            onValueChange = { emergencyPhone = it },
-            label = { Text("Teléfono de emergencia", color = SportProTextSecondary) },
-            singleLine = true,
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedContainerColor = SportProCardBackground,
-                unfocusedContainerColor = SportProCardBackground,
-                focusedBorderColor = SportProGreen,
-                unfocusedBorderColor = SportProCardBorder,
-                focusedTextColor = SportProTextPrimary,
-                unfocusedTextColor = SportProTextPrimary
-            ),
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp)
-        )
-
-        Spacer(modifier = Modifier.height(20.dp))
-
-        // Privacy card
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
-                .border(1.dp, SportProGreen.copy(alpha = 0.3f), RoundedCornerShape(12.dp)),
-            colors = CardDefaults.cardColors(containerColor = SportProGreenContainer)
-        ) {
-            Row(
-                modifier = Modifier.padding(14.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Security,
-                    contentDescription = "Privacidad",
-                    tint = SportProGreen,
-                    modifier = Modifier.size(24.dp)
-                )
-                Spacer(modifier = Modifier.width(12.dp))
-                Text(
-                    text = "Protección de datos: Los datos de contacto y de menores de edad están protegidos de acuerdo con las políticas de privacidad de SportPro.",
-                    fontSize = 12.sp,
-                    color = SportProTextSecondary
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.weight(1f))
-
-        Button(
-            onClick = {
-                viewModel.updateResponsibleData(
-                    parentPhone = parentPhone,
-                    parentName = parentName,
-                    parentRelation = parentRelation,
-                    emergencyPhone = emergencyPhone
-                )
-                viewModel.registerPlayer()
-                onPlayerRegistered()
-            },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(50.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = SportProGreen,
-                contentColor = Color.Black
-            ),
-            shape = RoundedCornerShape(12.dp)
-        ) {
-            Text(
-                text = "Registrar jugador",
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Bold
-            )
+            Spacer(modifier = Modifier.height(20.dp))
         }
     }
 }

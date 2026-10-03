@@ -3,6 +3,7 @@ package devs.grupo5.sportpro.presentation.trainer.navigation
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -13,6 +14,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import devs.grupo5.sportpro.presentation.auth.AuthViewModel
 import devs.grupo5.sportpro.presentation.trainer.community.CommunityScreen
 import devs.grupo5.sportpro.presentation.trainer.community.CommunityViewModel
 import devs.grupo5.sportpro.presentation.trainer.community.CreatePostScreen
@@ -74,7 +76,9 @@ object TrainerRoutes {
 
 @Composable
 fun TrainerMainContainerScreen(
-    navController: NavHostController = rememberNavController()
+    navController: NavHostController = rememberNavController(),
+    authViewModel: AuthViewModel = viewModel(),
+    onLogoutSuccess: () -> Unit = {}
 ) {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route ?: TrainerRoutes.DASHBOARD
@@ -155,7 +159,11 @@ fun TrainerMainContainerScreen(
                     TeamDetailScreen(
                         teamId = teamId,
                         viewModel = teamViewModel,
-                        onBackClick = { navController.popBackStack() }
+                        onBackClick = { navController.popBackStack() },
+                        onRegisterNewPlayerClick = { id ->
+                            playerViewModel.startRegistrationForTeam(id)
+                            navController.navigate(TrainerRoutes.PLAYER_PERSONAL)
+                        }
                     )
                 }
 
@@ -163,7 +171,10 @@ fun TrainerMainContainerScreen(
                 composable(TrainerRoutes.PLAYERS) {
                     PlayersScreen(
                         viewModel = playerViewModel,
-                        onAddPlayerClick = { navController.navigate(TrainerRoutes.PLAYER_PERSONAL) }
+                        onAddPlayerClick = {
+                            playerViewModel.startRegistrationForTeam(null)
+                            navController.navigate(TrainerRoutes.PLAYER_PERSONAL)
+                        }
                     )
                 }
 
@@ -188,7 +199,12 @@ fun TrainerMainContainerScreen(
                         viewModel = playerViewModel,
                         onBackClick = { navController.popBackStack() },
                         onPlayerRegistered = {
-                            navController.popBackStack(TrainerRoutes.PLAYERS, inclusive = false)
+                            val targetTeamId = playerViewModel.currentTeamIdForRegistration
+                            if (targetTeamId != null && targetTeamId.isNotBlank()) {
+                                navController.popBackStack("team_detail/$targetTeamId", inclusive = false)
+                            } else {
+                                navController.popBackStack(TrainerRoutes.PLAYERS, inclusive = false)
+                            }
                         }
                     )
                 }
@@ -333,8 +349,25 @@ fun TrainerMainContainerScreen(
 
                 // Mi Perfil (HU-005)
                 composable(TrainerRoutes.PROFILE) {
+                    val currentUser by authViewModel.currentUser.collectAsState()
+                    val trainerName = if (currentUser != null) "${currentUser?.firstName} ${currentUser?.lastName}".trim() else "Carlos Ramírez"
+                    val trainerEmail = currentUser?.email ?: "entrenador@sportpro.com"
+
+                    val computedInitials = if (trainerName.isNotBlank()) {
+                        val parts = trainerName.split(" ").filter { it.isNotBlank() }
+                        if (parts.size >= 2) "${parts[0].take(1)}${parts[1].take(1)}".uppercase()
+                        else trainerName.take(2).uppercase()
+                    } else "CR"
+
                     ProfileScreen(
-                        onBackClick = { navController.popBackStack() }
+                        fullName = if (trainerName.isNotBlank()) trainerName else "Carlos Ramírez",
+                        email = trainerEmail,
+                        role = "Entrenador / DT",
+                        academy = "Academia SportPro",
+                        teams = "Primera • Sub-15",
+                        initials = computedInitials,
+                        onBackClick = { navController.popBackStack() },
+                        onLogoutClick = onLogoutSuccess
                     )
                 }
             }

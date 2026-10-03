@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -50,13 +51,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import devs.grupo5.sportpro.data.model.Player
-import devs.grupo5.sportpro.data.model.Team
 import devs.grupo5.sportpro.presentation.trainer.theme.SportProCardBackground
 import devs.grupo5.sportpro.presentation.trainer.theme.SportProCardBorder
 import devs.grupo5.sportpro.presentation.trainer.theme.SportProDarkBackground
 import devs.grupo5.sportpro.presentation.trainer.theme.SportProError
 import devs.grupo5.sportpro.presentation.trainer.theme.SportProGreen
+import devs.grupo5.sportpro.presentation.trainer.theme.SportProGreenContainer
 import devs.grupo5.sportpro.presentation.trainer.theme.SportProTextMuted
 import devs.grupo5.sportpro.presentation.trainer.theme.SportProTextPrimary
 import devs.grupo5.sportpro.presentation.trainer.theme.SportProTextSecondary
@@ -65,7 +65,8 @@ import devs.grupo5.sportpro.presentation.trainer.theme.SportProTextSecondary
 fun TeamDetailScreen(
     teamId: String,
     viewModel: TeamViewModel = viewModel(),
-    onBackClick: () -> Unit = {}
+    onBackClick: () -> Unit = {},
+    onRegisterNewPlayerClick: (teamId: String) -> Unit = {}
 ) {
     val teams by viewModel.teams.collectAsState()
     val availablePlayers by viewModel.availablePlayers.collectAsState()
@@ -380,7 +381,7 @@ fun TeamDetailScreen(
         }
     }
 
-    // Add Player Dialog
+    // Modal de Agregar Jugador: Ofrece Registrar Nuevo Jugador O Seleccionar Existente
     if (showAddPlayerDialog) {
         val nonTeamPlayers = availablePlayers.filter { it.id !in team.playerIds }
 
@@ -388,32 +389,103 @@ fun TeamDetailScreen(
             onDismissRequest = { showAddPlayerDialog = false },
             containerColor = SportProCardBackground,
             title = {
-                Text("Agregar jugador a ${team.name}", color = SportProTextPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                Text(
+                    text = "Agregar jugador a ${team.name}",
+                    color = SportProTextPrimary,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold
+                )
             },
             text = {
-                if (nonTeamPlayers.isEmpty()) {
-                    Text("Todos los jugadores disponibles ya pertenecen a este equipo.", color = SportProTextSecondary)
-                } else {
-                    LazyColumn(modifier = Modifier.height(300.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        items(nonTeamPlayers) { player ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(SportProDarkBackground)
-                                    .clickable {
-                                        viewModel.addPlayerToTeam(team.id, player.id)
-                                        showAddPlayerDialog = false
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    // Opción A: Registrar nuevo jugador
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(SportProGreenContainer)
+                            .border(1.dp, SportProGreen, RoundedCornerShape(12.dp))
+                            .clickable {
+                                showAddPlayerDialog = false
+                                onRegisterNewPlayerClick(team.id)
+                            }
+                            .padding(14.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.PersonAdd,
+                                contentDescription = null,
+                                tint = SportProGreen,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "+ Registrar nuevo jugador",
+                                color = SportProGreen,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Text(
+                        text = "Jugadores disponibles",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = SportProTextMuted
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // Opción B: Seleccionar jugadores existentes
+                    if (nonTeamPlayers.isEmpty()) {
+                        Text(
+                            text = "No hay otros jugadores registrados disponibles.",
+                            color = SportProTextSecondary,
+                            fontSize = 12.sp,
+                            modifier = Modifier.padding(vertical = 8.dp)
+                        )
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier.height(220.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            items(nonTeamPlayers, key = { it.id }) { player ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(SportProDarkBackground)
+                                        .clickable {
+                                            viewModel.addPlayerToTeam(team.id, player.id)
+                                            showAddPlayerDialog = false
+                                        }
+                                        .padding(10.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column {
+                                        Text(
+                                            text = player.fullName,
+                                            color = SportProTextPrimary,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 14.sp
+                                        )
+                                        Text(
+                                            text = "${player.position} • ${player.category}",
+                                            fontSize = 11.sp,
+                                            color = SportProTextSecondary
+                                        )
                                     }
-                                    .padding(10.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column {
-                                    Text(player.fullName, color = SportProTextPrimary, fontWeight = FontWeight.Bold)
-                                    Text("${player.position} • ${player.category}", fontSize = 11.sp, color = SportProTextSecondary)
+                                    Icon(
+                                        imageVector = Icons.Default.Add,
+                                        contentDescription = "Agregar",
+                                        tint = SportProGreen
+                                    )
                                 }
-                                Icon(imageVector = Icons.Default.Add, contentDescription = "Agregar", tint = SportProGreen)
                             }
                         }
                     }
@@ -421,7 +493,7 @@ fun TeamDetailScreen(
             },
             confirmButton = {
                 TextButton(onClick = { showAddPlayerDialog = false }) {
-                    Text("Cerrar", color = SportProGreen)
+                    Text("Cerrar", color = SportProGreen, fontWeight = FontWeight.Bold)
                 }
             }
         )
