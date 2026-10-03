@@ -22,7 +22,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import devs.grupo5.sportpro.ui.theme.SportProTheme
 
-// Colores según el prototipo de Figma
+// Colores según el Figma
 val DarkBackground = Color(0xFF121414)
 val CardBackground = Color(0xFF1C2220)
 val PrimaryGreen = Color(0xFF00A86B)
@@ -88,7 +88,7 @@ fun ProfileHeaderCard() {
                 .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Avatar Circular "CM"
+
             Box(
                 modifier = Modifier
                     .size(72.dp)

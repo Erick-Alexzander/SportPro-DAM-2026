@@ -8,15 +8,13 @@ import android.view.Gravity
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
-import androidx.activity.ComponentActivity // <-- CAMBIO AQUÍ
+import androidx.activity.ComponentActivity
 
-class ProfileActivity : ComponentActivity() { // <-- CAMBIO AQUÍ
+class ProfileActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Resto del código igual...
-        // Contenedor principal con ScrollView
         val scrollView = ScrollView(this).apply {
             setBackgroundColor(Color.parseColor("#121414"))
             isFillViewport = true
@@ -27,12 +25,10 @@ class ProfileActivity : ComponentActivity() { // <-- CAMBIO AQUÍ
             setPadding(dpToPx(16), dpToPx(16), dpToPx(16), dpToPx(16))
         }
 
-        // 1. Tarjeta de Perfil
         val profileCard = createCard().apply {
             addView(createProfileHeaderContent())
         }
 
-        // 2. Tarjeta de Información de Cuenta
         val accountCard = createCard().apply {
             addView(createAccountInfoContent())
         }
@@ -44,7 +40,6 @@ class ProfileActivity : ComponentActivity() { // <-- CAMBIO AQUÍ
         setContentView(scrollView)
     }
 
-    // Método para crear el fondo de tarjeta curva (#1C2220)
     private fun createCard(): LinearLayout {
         return LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -63,14 +58,12 @@ class ProfileActivity : ComponentActivity() { // <-- CAMBIO AQUÍ
         }
     }
 
-    // Contenido de la Tarjeta 1 (Avatar, Nombre, Rol, Academia)
     private fun createProfileHeaderContent(): LinearLayout {
         return LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
             setPadding(dpToPx(24), dpToPx(24), dpToPx(24), dpToPx(24))
 
-            // Avatar Circular "CM"
             val avatar = TextView(context).apply {
                 text = "CM"
                 setTextColor(Color.WHITE)
@@ -85,7 +78,6 @@ class ProfileActivity : ComponentActivity() { // <-- CAMBIO AQUÍ
                 layoutParams = LinearLayout.LayoutParams(dpToPx(72), dpToPx(72))
             }
 
-            // Nombre del Jugador
             val name = TextView(context).apply {
                 text = "Carlos Mendoza"
                 setTextColor(Color.WHITE)
@@ -97,7 +89,6 @@ class ProfileActivity : ComponentActivity() { // <-- CAMBIO AQUÍ
                 ).apply { setMargins(0, dpToPx(12), 0, 0) }
             }
 
-            // Badge/Chip verde "Jugador"
             val roleBadge = TextView(context).apply {
                 text = "Jugador"
                 setTextColor(Color.parseColor("#00A86B"))
@@ -115,7 +106,6 @@ class ProfileActivity : ComponentActivity() { // <-- CAMBIO AQUÍ
                 ).apply { setMargins(0, dpToPx(6), 0, 0) }
             }
 
-            // Subtítulo Academia
             val academy = TextView(context).apply {
                 text = "Academia SportPro · Primera"
                 setTextColor(Color.parseColor("#A0A5A3"))
@@ -133,7 +123,6 @@ class ProfileActivity : ComponentActivity() { // <-- CAMBIO AQUÍ
         }
     }
 
-    // Contenido de la Tarjeta 2 (Información de cuenta)
     private fun createAccountInfoContent(): LinearLayout {
         return LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -158,7 +147,6 @@ class ProfileActivity : ComponentActivity() { // <-- CAMBIO AQUÍ
         }
     }
 
-    // Fila individual de clave -> valor
     private fun createDataRow(label: String, value: String): LinearLayout {
         return LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -183,7 +171,6 @@ class ProfileActivity : ComponentActivity() { // <-- CAMBIO AQUÍ
         }
     }
 
-    // Conversor auxiliar de DP a Píxeles
     private fun dpToPx(dp: Int): Int {
         return (dp * resources.displayMetrics.density).toInt()
     }
