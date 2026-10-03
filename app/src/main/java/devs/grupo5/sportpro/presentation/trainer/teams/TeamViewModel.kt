@@ -13,10 +13,7 @@ import devs.grupo5.sportpro.data.repository.MockTrainingRepository
 import devs.grupo5.sportpro.data.repository.PlayerRepository
 import devs.grupo5.sportpro.data.repository.TeamRepository
 import devs.grupo5.sportpro.data.repository.TrainingRepository
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.stateIn
 
 class TeamViewModel(
     private val teamRepository: TeamRepository = MockTeamRepository.instance,
@@ -36,12 +33,12 @@ class TeamViewModel(
         return playerRepository.getPlayersByIds(team.playerIds)
     }
 
-    fun getTeamTrainings(category: String): List<Training> {
-        return trainingRepository.trainings.value.filter { it.category == category }
+    fun getTeamTrainings(teamId: String): List<Training> {
+        return trainingRepository.trainings.value.filter { it.teamId == teamId }
     }
 
-    fun getTeamMatches(category: String): List<Match> {
-        return matchRepository.matches.value.filter { it.category == category }
+    fun getTeamMatches(teamId: String): List<Match> {
+        return matchRepository.matches.value.filter { it.teamId == teamId }
     }
 
     fun createTeam(

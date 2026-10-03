@@ -90,8 +90,8 @@ fun TeamDetailScreen(
     }
 
     val teamPlayers = viewModel.getTeamPlayers(team)
-    val teamTrainings = viewModel.getTeamTrainings(team.category)
-    val teamMatches = viewModel.getTeamMatches(team.category)
+    val teamTrainings = viewModel.getTeamTrainings(team.id)
+    val teamMatches = viewModel.getTeamMatches(team.id)
 
     Column(
         modifier = Modifier
@@ -304,7 +304,7 @@ fun TeamDetailScreen(
                 // Entrenamientos Tab
                 if (teamTrainings.isEmpty()) {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text("No hay entrenamientos para esta categoría.", color = SportProTextMuted)
+                        Text("No hay entrenamientos para este equipo.", color = SportProTextMuted)
                     }
                 } else {
                     LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -343,7 +343,7 @@ fun TeamDetailScreen(
                 // Partidos Tab
                 if (teamMatches.isEmpty()) {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text("No hay partidos programados para esta categoría.", color = SportProTextMuted)
+                        Text("No hay partidos programados para este equipo.", color = SportProTextMuted)
                     }
                 } else {
                     LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {

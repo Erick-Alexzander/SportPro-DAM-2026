@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -28,6 +29,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -42,11 +44,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import devs.grupo5.sportpro.data.model.Exercise
+import devs.grupo5.sportpro.data.model.Team
 import devs.grupo5.sportpro.presentation.trainer.theme.SportProCardBackground
 import devs.grupo5.sportpro.presentation.trainer.theme.SportProCardBorder
 import devs.grupo5.sportpro.presentation.trainer.theme.SportProDarkBackground
 import devs.grupo5.sportpro.presentation.trainer.theme.SportProError
 import devs.grupo5.sportpro.presentation.trainer.theme.SportProGreen
+import devs.grupo5.sportpro.presentation.trainer.theme.SportProTextMuted
 import devs.grupo5.sportpro.presentation.trainer.theme.SportProTextPrimary
 import devs.grupo5.sportpro.presentation.trainer.theme.SportProTextSecondary
 
@@ -56,11 +60,15 @@ fun CreateTrainingScreen(
     onBackClick: () -> Unit = {},
     onSessionCreated: () -> Unit = {}
 ) {
+    val teams: List<Team> by viewModel.teams.collectAsState()
+
+    var selectedTeamId by remember { mutableStateOf(teams.firstOrNull()?.id ?: "") }
+    var selectedCategory by remember { mutableStateOf(teams.firstOrNull()?.category ?: "Primera") }
+
     var title by remember { mutableStateOf("") }
     var date by remember { mutableStateOf("Hoy") }
     var startTime by remember { mutableStateOf("18:30") }
     var durationText by remember { mutableStateOf("90") }
-    var selectedCategory by remember { mutableStateOf("Primera") }
     var objective by remember { mutableStateOf("") }
 
     // Exercises
@@ -74,7 +82,6 @@ fun CreateTrainingScreen(
         )
     }
 
-    val categories = listOf("Primera", "Sub-15", "Sub-10")
     val exerciseTypes = listOf("Táctico", "Físico", "Técnico")
 
     Column(
@@ -110,6 +117,57 @@ fun CreateTrainingScreen(
             modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
+            // Seleccionar Equipo
+            item {
+                Column {
+                    Text(
+                        text = "Seleccionar Equipo",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = SportProTextSecondary
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    if (teams.isEmpty()) {
+                        Text("No hay equipos disponibles", fontSize = 12.sp, color = SportProTextMuted)
+                    } else {
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            items(teams, key = { it.id }) { team ->
+                                val isSelected = selectedTeamId == team.id
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(if (isSelected) SportProGreen else SportProCardBackground)
+                                        .border(
+                                            1.dp,
+                                            if (isSelected) SportProGreen else SportProCardBorder,
+                                            RoundedCornerShape(12.dp)
+                                        )
+                                        .clickable {
+                                            selectedTeamId = team.id
+                                            selectedCategory = team.category
+                                        }
+                                        .padding(horizontal = 14.dp, vertical = 10.dp)
+                                ) {
+                                    Column {
+                                        Text(
+                                            text = team.name,
+                                            color = if (isSelected) Color.Black else SportProTextPrimary,
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Text(
+                                            text = team.category,
+                                            color = if (isSelected) Color.DarkGray else SportProTextSecondary,
+                                            fontSize = 11.sp
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             item {
                 OutlinedTextField(
                     value = title,
@@ -184,33 +242,6 @@ fun CreateTrainingScreen(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp)
                 )
-            }
-
-            item {
-                Column {
-                    Text("Categoría / Equipo", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = SportProTextSecondary)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        categories.forEach { category ->
-                            val isSelected = selectedCategory == category
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(20.dp))
-                                    .background(if (isSelected) SportProGreen else SportProCardBackground)
-                                    .border(1.dp, if (isSelected) SportProGreen else SportProCardBorder, RoundedCornerShape(20.dp))
-                                    .clickable { selectedCategory = category }
-                                    .padding(horizontal = 16.dp, vertical = 8.dp)
-                            ) {
-                                Text(
-                                    text = category,
-                                    color = if (isSelected) Color.Black else SportProTextPrimary,
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
-                    }
-                }
             }
 
             item {
@@ -334,10 +365,13 @@ fun CreateTrainingScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
+        val isFormValid = title.isNotBlank() && selectedTeamId.isNotBlank()
+
         Button(
             onClick = {
-                if (title.isNotBlank()) {
+                if (isFormValid) {
                     viewModel.createTraining(
+                        teamId = selectedTeamId,
                         title = title,
                         date = date,
                         startTime = startTime,
@@ -349,18 +383,20 @@ fun CreateTrainingScreen(
                     onSessionCreated()
                 }
             },
-            enabled = title.isNotBlank(),
+            enabled = isFormValid,
             modifier = Modifier
                 .fillMaxWidth()
                 .height(50.dp),
             colors = ButtonDefaults.buttonColors(
                 containerColor = SportProGreen,
-                contentColor = Color.Black
+                contentColor = Color.Black,
+                disabledContainerColor = SportProGreen.copy(alpha = 0.3f),
+                disabledContentColor = Color.DarkGray
             ),
             shape = RoundedCornerShape(12.dp)
         ) {
             Text(
-                text = "Crear sesión",
+                text = "Crear entrenamiento",
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold
             )
