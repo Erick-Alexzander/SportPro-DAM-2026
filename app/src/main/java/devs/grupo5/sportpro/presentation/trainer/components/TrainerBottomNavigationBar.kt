@@ -5,6 +5,7 @@ import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.Forum
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.SportsSoccer
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
@@ -26,7 +27,8 @@ enum class TrainerTab(val title: String, val icon: ImageVector, val route: Strin
     TRAINING("Entrenam.", Icons.Default.FitnessCenter, "trainer_training"),
     MATCHES("Partidos", Icons.Default.SportsSoccer, "trainer_matches"),
     TEAMS("Equipo", Icons.Default.Groups, "trainer_teams"),
-    COMMUNITY("Comunidad", Icons.Default.Forum, "trainer_community")
+    COMMUNITY("Comunidad", Icons.Default.Forum, "trainer_community"),
+    PROFILE("Mi Perfil", Icons.Default.Person, "trainer_profile")
 }
 
 @Composable
