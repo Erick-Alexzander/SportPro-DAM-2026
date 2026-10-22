@@ -15,7 +15,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
-import androidx.compose.material.icons.filled.EscalatorWarning
 import androidx.compose.material.icons.filled.SportsKabaddi
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -46,18 +45,6 @@ fun PlayerPlaceholderScreen(
         roleTitle = "Módulo de Jugador",
         message = "El módulo de Jugador está en desarrollo.\nPronto podrás consultar tus estadísticas, historial de partidos y llamados a convocatorias.",
         icon = Icons.Default.SportsKabaddi,
-        onLogoutClick = onLogoutClick
-    )
-}
-
-@Composable
-fun ParentPlaceholderScreen(
-    onLogoutClick: () -> Unit = {}
-) {
-    RolePlaceholderScreen(
-        roleTitle = "Módulo de Padre / Apoderado",
-        message = "El módulo de Padre/Apoderado está en desarrollo.\nPronto podrás hacer seguimiento al rendimiento de tu hijo y comunicarte con la academia.",
-        icon = Icons.Default.EscalatorWarning,
         onLogoutClick = onLogoutClick
     )
 }
