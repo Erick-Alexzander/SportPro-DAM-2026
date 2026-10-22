@@ -8,6 +8,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import devs.grupo5.sportpro.data.model.UserRole
 import devs.grupo5.sportpro.presentation.player.navigation.PlayerMainContainerScreen
+import devs.grupo5.sportpro.presentation.parent.navigation.ParentMainContainerScreen
 import devs.grupo5.sportpro.presentation.trainer.navigation.TrainerMainContainerScreen
 import devs.grupo5.sportpro.ui.screens.RegisterScreen
 
@@ -117,10 +118,11 @@ fun AuthNavGraph(
             )
         }
 
-        // Parent Placeholder
+        // Parent Module (solo accesible para usuarios registrados como Padre / Apoderado)
         composable(AuthRoutes.PARENT_MODULE) {
-            ParentPlaceholderScreen(
-                onLogoutClick = {
+            ParentMainContainerScreen(
+                authViewModel = authViewModel,
+                onLogoutSuccess = {
                     authViewModel.logout()
                     navController.navigate(AuthRoutes.WELCOME) {
                         popUpTo(0) { inclusive = true }

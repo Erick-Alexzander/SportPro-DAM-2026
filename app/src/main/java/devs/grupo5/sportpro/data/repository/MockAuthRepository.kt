@@ -18,6 +18,16 @@ class MockAuthRepository private constructor() : AuthRepository {
                 role = UserRole.TRAINER
             ),
             "12345678"
+        ),
+        "apoderado@sportpro.com" to Pair(
+            UserProfile(
+                uid = "u_parent_1",
+                firstName = "María",
+                lastName = "González",
+                email = "apoderado@sportpro.com",
+                role = UserRole.PARENT
+            ),
+            "12345678"
         )
     )
 

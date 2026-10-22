@@ -250,6 +250,13 @@ fun LoginScreen(
                     }
                 )
             }
+
+            Text(
+                text = "Cuentas de prueba (contraseña 12345678):\n" +
+                    "entrenador@sportpro.com · apoderado@sportpro.com",
+                fontSize = 12.sp,
+                color = TextSecondaryDark
+            )
         }
 
         Column(modifier = Modifier.padding(horizontal = 24.dp, vertical = 20.dp)) {
