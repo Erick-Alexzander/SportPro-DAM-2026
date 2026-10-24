@@ -56,7 +56,7 @@ import devs.grupo5.sportpro.presentation.player.theme.PlayerTextPrimary
 import devs.grupo5.sportpro.presentation.player.theme.PlayerTextSecondary
 import devs.grupo5.sportpro.presentation.player.theme.SportProPlayerTheme
 
-private data class PlayerMatch(
+internal data class PlayerMatch(
     val id: String,
     val status: String, // "En vivo", "Finalizado", "Programado"
     val category: String,
@@ -73,7 +73,7 @@ private data class PlayerMatch(
 
 private val filterOptions = listOf("Todos", "Programado", "En vivo", "Finalizado")
 
-private val sampleMatches = listOf(
+internal val sampleMatches = listOf(
     PlayerMatch(
         id = "m1",
         status = "En vivo",
@@ -135,6 +135,7 @@ private val sampleMatches = listOf(
 @Composable
 fun MatchesScreen(
     onBackClick: () -> Unit = {},
+    onMatchClick: (String) -> Unit = {},
     onTabSelected: (PlayerTab) -> Unit = {}
 ) {
     var selectedFilter by remember { mutableStateOf("Todos") }
@@ -215,7 +216,10 @@ fun MatchesScreen(
                         verticalArrangement = Arrangement.spacedBy(14.dp)
                     ) {
                         items(filteredMatches, key = { it.id }) { match ->
-                            MatchCard(match = match)
+                            MatchCard(
+                                match = match,
+                                onClick = { onMatchClick(match.id) }
+                            )
                         }
                         item { Spacer(modifier = Modifier.height(4.dp)) }
                     }
@@ -253,12 +257,16 @@ private fun FilterChip(
 }
 
 @Composable
-private fun MatchCard(match: PlayerMatch) {
+private fun MatchCard(
+    match: PlayerMatch,
+    onClick: () -> Unit
+) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(20.dp))
-            .border(1.dp, PlayerBorder, RoundedCornerShape(20.dp)),
+            .border(1.dp, PlayerBorder, RoundedCornerShape(20.dp))
+            .clickable { onClick() },
         colors = CardDefaults.cardColors(containerColor = PlayerSurface)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {

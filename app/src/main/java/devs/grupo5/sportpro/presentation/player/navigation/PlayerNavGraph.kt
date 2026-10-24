@@ -22,6 +22,7 @@ import devs.grupo5.sportpro.presentation.player.components.PlayerTab
 import devs.grupo5.sportpro.presentation.player.dashboard.PlayerHomeScreen
 import devs.grupo5.sportpro.presentation.player.help.HelpSupportScreen
 import devs.grupo5.sportpro.presentation.player.library.ExerciseLibraryScreen
+import devs.grupo5.sportpro.presentation.player.matches.MatchDetailScreen
 import devs.grupo5.sportpro.presentation.player.matches.MatchesScreen
 import devs.grupo5.sportpro.presentation.player.notifications.NotificationsScreen
 import devs.grupo5.sportpro.presentation.player.privacy.PrivacyScreen
@@ -36,6 +37,7 @@ object PlayerRoutes {
     const val EXERCISE_LIBRARY = "player_exercise_library"
     const val AVAILABILITY = "player_availability"
     const val MATCHES = "player_matches"
+    const val MATCH_DETAIL = "player_match_detail/{matchId}"
     const val PROFILE = "player_profile"
     const val NOTIFICATIONS = "player_notifications"
     const val PRIVACY = "player_privacy"
@@ -46,6 +48,7 @@ object PlayerRoutes {
 
     fun sessionDetail(sessionId: String) = "player_session_detail/$sessionId"
     fun postDetail(postId: String) = "player_post_detail/$postId"
+    fun matchDetail(matchId: String) = "player_match_detail/$matchId"
 }
 
 @Composable
@@ -83,6 +86,21 @@ fun PlayerMainContainerScreen(
 
         composable(PlayerRoutes.MATCHES) {
             MatchesScreen(
+                onBackClick = { navController.popBackStack() },
+                onMatchClick = { matchId ->
+                    navController.navigate(PlayerRoutes.matchDetail(matchId))
+                },
+                onTabSelected = { tab -> navigateToTab(navController, tab) }
+            )
+        }
+
+        composable(
+            route = PlayerRoutes.MATCH_DETAIL,
+            arguments = listOf(navArgument("matchId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val matchId = backStackEntry.arguments?.getString("matchId") ?: ""
+            MatchDetailScreen(
+                matchId = matchId,
                 onBackClick = { navController.popBackStack() },
                 onTabSelected = { tab -> navigateToTab(navController, tab) }
             )
@@ -126,7 +144,6 @@ fun PlayerMainContainerScreen(
             SessionDetailScreen(
                 sessionId = sessionId,
                 onBackClick = { navController.popBackStack() },
-                onRegisterAttendanceClick = { navController.popBackStack() },
                 onTabSelected = { tab -> navigateToTab(navController, tab) }
             )
         }
