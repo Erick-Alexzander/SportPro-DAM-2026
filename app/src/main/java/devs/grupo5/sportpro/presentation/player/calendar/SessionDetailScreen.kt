@@ -19,14 +19,11 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Label
 import androidx.compose.material.icons.filled.AccessTime
-import androidx.compose.material.icons.filled.Assignment
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Groups
-import androidx.compose.material.icons.filled.Label
 import androidx.compose.material.icons.filled.Timer
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -47,7 +44,6 @@ import devs.grupo5.sportpro.presentation.player.components.PlayerBottomNavigatio
 import devs.grupo5.sportpro.presentation.player.components.PlayerTab
 import devs.grupo5.sportpro.presentation.player.theme.PlayerBackground
 import devs.grupo5.sportpro.presentation.player.theme.PlayerBorder
-import devs.grupo5.sportpro.presentation.player.theme.PlayerGreenContainer
 import devs.grupo5.sportpro.presentation.player.theme.PlayerNeonGreen
 import devs.grupo5.sportpro.presentation.player.theme.PlayerSurface
 import devs.grupo5.sportpro.presentation.player.theme.PlayerTextMuted
@@ -59,7 +55,6 @@ import devs.grupo5.sportpro.presentation.player.theme.SportProPlayerTheme
 fun SessionDetailScreen(
     sessionId: String = "",
     onBackClick: () -> Unit = {},
-    onRegisterAttendanceClick: () -> Unit = {},
     onTabSelected: (PlayerTab) -> Unit = {}
 ) {
     val session = findSessionById(sessionId)
@@ -110,32 +105,7 @@ fun SessionDetailScreen(
                 }
 
                 item {
-                    Button(
-                        onClick = onRegisterAttendanceClick,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 8.dp, bottom = 24.dp)
-                            .height(54.dp),
-                        shape = RoundedCornerShape(percent = 50),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = PlayerNeonGreen,
-                            contentColor = Color(0xFF00210B)
-                        )
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Assignment,
-                            contentDescription = null,
-                            tint = Color(0xFF00210B),
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Text(
-                            text = "Registrar asistencia",
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF00210B)
-                        )
-                    }
+                    Spacer(modifier = Modifier.height(24.dp))
                 }
             }
         }
@@ -198,7 +168,7 @@ private fun SessionInfoCard(session: PlayerTrainingSession) {
                 value = "${session.durationMinutes} min"
             )
             InfoRow(
-                icon = Icons.Default.Label,
+                icon = Icons.AutoMirrored.Filled.Label,
                 label = "Categoría",
                 value = session.category
             )
