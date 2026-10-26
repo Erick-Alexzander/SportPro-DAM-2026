@@ -1,6 +1,9 @@
 package devs.grupo5.sportpro.data.repository
 
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.FirebaseAuthInvalidCredentialsException
+import com.google.firebase.auth.FirebaseAuthUserCollisionException
+import com.google.firebase.auth.FirebaseAuthWeakPasswordException
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.firestore.FirebaseFirestore
 import devs.grupo5.sportpro.data.model.UserProfile
@@ -9,6 +12,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.tasks.await
+import java.util.concurrent.atomic.AtomicBoolean
 
 class FirebaseAuthRepository private constructor() : AuthRepository {
 
@@ -18,19 +22,27 @@ class FirebaseAuthRepository private constructor() : AuthRepository {
     private val _currentUser = MutableStateFlow<UserProfile?>(null)
     override val currentUser: StateFlow<UserProfile?> = _currentUser.asStateFlow()
 
-    private val registeredEmails = mutableSetOf<String>()
+    // Evita que el AuthStateListener reaccione y cierre sesión prematuramente durante el registro
+    private val isRegistering = AtomicBoolean(false)
 
     init {
         // Observe auth state changes and fetch profile from users/{uid}
         auth.addAuthStateListener { firebaseAuth ->
             val firebaseUser = firebaseAuth.currentUser
             if (firebaseUser != null) {
+                if (isRegistering.get()) return@addAuthStateListener
+                
                 fetchUserProfile(firebaseUser.uid) { profile ->
-                    _currentUser.value = profile ?: UserProfile(
-                        uid = firebaseUser.uid,
-                        email = firebaseUser.email ?: "",
-                        firstName = firebaseUser.displayName ?: ""
-                    )
+                    // Verificar que no cerró sesión o cambió de cuenta durante la consulta
+                    if (auth.currentUser?.uid == firebaseUser.uid && !isRegistering.get()) {
+                        if (profile != null) {
+                            _currentUser.value = profile
+                        } else {
+                            // Perfil inexistente o inválido: invalidar sesión y expulsar
+                            auth.signOut()
+                            _currentUser.value = null
+                        }
+                    }
                 }
             } else {
                 _currentUser.value = null
@@ -42,11 +54,22 @@ class FirebaseAuthRepository private constructor() : AuthRepository {
         firestore.collection("users").document(uid).get()
             .addOnSuccessListener { document ->
                 if (document.exists()) {
-                    val profile = document.toObject(UserProfile::class.java)
-                    if (profile != null && !profile.email.isBlank()) {
-                        registeredEmails.add(profile.email.lowercase().trim())
+                    // Validación Estricta: Verificar existencia explícita del rol en Firestore
+                    val roleStr = document.getString("role")
+                    val hasValidRole = roleStr != null && runCatching { UserRole.valueOf(roleStr) }.isSuccess
+                    
+                    if (!hasValidRole) {
+                        onResult(null)
+                        return@addOnSuccessListener
                     }
-                    onResult(profile)
+
+                    val profile = document.toObject(UserProfile::class.java)
+                    // Validar correspondencia estricta de UID
+                    if (profile != null && profile.uid == uid) {
+                        onResult(profile)
+                    } else {
+                        onResult(null)
+                    }
                 } else {
                     onResult(null)
                 }
@@ -56,9 +79,9 @@ class FirebaseAuthRepository private constructor() : AuthRepository {
             }
     }
 
-    override val isEmailRegistered: (String) -> Boolean = { email ->
-        registeredEmails.contains(email.lowercase().trim())
-    }
+    // Retorna false para evitar Email Enumeration Protection. 
+    // La validación real ocurre en el registro interceptando FirebaseAuthUserCollisionException.
+    override val isEmailRegistered: (String) -> Boolean = { _ -> false }
 
     override suspend fun login(email: String, password: String): Result<UserProfile> {
         return try {
@@ -66,18 +89,40 @@ class FirebaseAuthRepository private constructor() : AuthRepository {
             val firebaseUser = authResult.user
             if (firebaseUser != null) {
                 val doc = firestore.collection("users").document(firebaseUser.uid).get().await()
-                val profile = doc.toObject(UserProfile::class.java) ?: UserProfile(
-                    uid = firebaseUser.uid,
-                    email = firebaseUser.email ?: email,
-                    firstName = firebaseUser.displayName ?: ""
-                )
-                registeredEmails.add(profile.email.lowercase().trim())
-                _currentUser.value = profile
-                Result.success(profile)
+                if (doc.exists()) {
+                    // Validación estricta de rol
+                    val roleStr = doc.getString("role")
+                    val hasValidRole = roleStr != null && runCatching { UserRole.valueOf(roleStr) }.isSuccess
+                    
+                    if (!hasValidRole) {
+                        auth.signOut()
+                        _currentUser.value = null
+                        return Result.failure(Exception("El perfil de usuario carece de un rol válido."))
+                    }
+
+                    val profile = doc.toObject(UserProfile::class.java)
+                    if (profile != null && profile.uid == firebaseUser.uid) {
+                        _currentUser.value = profile
+                        Result.success(profile)
+                    } else {
+                        auth.signOut()
+                        _currentUser.value = null
+                        Result.failure(Exception("El perfil de usuario es inválido o está corrupto."))
+                    }
+                } else {
+                    auth.signOut()
+                    _currentUser.value = null
+                    Result.failure(Exception("No se encontró el perfil de usuario en la base de datos."))
+                }
             } else {
-                Result.failure(Exception("No se pudo autenticar al usuario"))
+                Result.failure(Exception("No se pudo autenticar al usuario."))
             }
         } catch (e: Exception) {
+            // Si la lectura en Firestore falla por red, limpiamos si hay sesión residual
+            if (auth.currentUser != null) {
+                auth.signOut()
+                _currentUser.value = null
+            }
             Result.failure(e)
         }
     }
@@ -90,12 +135,14 @@ class FirebaseAuthRepository private constructor() : AuthRepository {
         role: UserRole,
         birthDate: String?
     ): Result<UserProfile> {
-        val normalizedEmail = email.lowercase().trim()
-        if (registeredEmails.contains(normalizedEmail)) {
-            return Result.failure(Exception("Este correo ya está registrado"))
+        if (role == UserRole.ADMIN) {
+            return Result.failure(Exception("No tienes permisos para registrar una cuenta de Administrador."))
         }
 
+        val normalizedEmail = email.lowercase().trim()
         var firebaseUser: FirebaseUser? = null
+        
+        isRegistering.set(true)
         try {
             val authResult = auth.createUserWithEmailAndPassword(normalizedEmail, password).await()
             firebaseUser = authResult.user
@@ -110,24 +157,31 @@ class FirebaseAuthRepository private constructor() : AuthRepository {
                 )
                 // Save profile to Firestore collection "users/{uid}"
                 firestore.collection("users").document(firebaseUser.uid).set(userProfile).await()
-                registeredEmails.add(normalizedEmail)
                 _currentUser.value = userProfile
                 return Result.success(userProfile)
             } else {
-                return Result.failure(Exception("Error al crear la cuenta de usuario"))
+                return Result.failure(Exception("Error al crear la cuenta de usuario."))
             }
         } catch (e: Exception) {
+            var rollbackWarning = ""
             // Rollback: if user was created in Auth but Firestore write failed, delete the auth user
-            try {
-                firebaseUser?.delete()?.await()
-            } catch (_: Exception) {
-                // If deletion fails, ignore or handle
+            if (firebaseUser != null) {
+                try {
+                    firebaseUser.delete().await()
+                } catch (_: Exception) {
+                    rollbackWarning = " (Aviso: La cuenta de correo fue creada pero quedó huérfana y requerirá soporte técnico para eliminarse)."
+                }
             }
-            val errorMsg = when {
-                e.message?.contains("email-already-in-use", ignoreCase = true) == true -> "Este correo ya está registrado"
+            
+            val errorMsg = when (e) {
+                is FirebaseAuthUserCollisionException -> "Este correo ya está registrado"
+                is FirebaseAuthWeakPasswordException -> "La contraseña es demasiado débil"
+                is FirebaseAuthInvalidCredentialsException -> "El formato del correo es inválido"
                 else -> e.message ?: "Error al registrar la cuenta"
             }
-            return Result.failure(Exception(errorMsg))
+            return Result.failure(Exception(errorMsg + rollbackWarning))
+        } finally {
+            isRegistering.set(false)
         }
     }
 

@@ -23,6 +23,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
@@ -35,6 +36,7 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -60,6 +62,9 @@ fun CreateTeamScreen(
     onTeamCreated: () -> Unit = {}
 ) {
     val availablePlayers by viewModel.availablePlayers.collectAsState()
+    val isLoading by viewModel.isLoading.collectAsState()
+    val errorMessage by viewModel.errorMessage.collectAsState()
+    val isSuccess by viewModel.isSuccess.collectAsState()
 
     var name by remember { mutableStateOf("") }
     var selectedCategory by remember { mutableStateOf("Primera") }
@@ -67,6 +72,13 @@ fun CreateTeamScreen(
     val selectedPlayerIds = remember { mutableStateListOf<String>() }
 
     val categories = listOf("Primera", "Sub-15", "Sub-10")
+
+    LaunchedEffect(isSuccess) {
+        if (isSuccess) {
+            viewModel.resetState()
+            onTeamCreated()
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -250,6 +262,15 @@ fun CreateTeamScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
+        if (errorMessage != null) {
+            Text(
+                text = errorMessage ?: "",
+                color = Color.Red,
+                fontSize = 14.sp,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+        }
+
         Button(
             onClick = {
                 if (name.isNotBlank()) {
@@ -257,12 +278,13 @@ fun CreateTeamScreen(
                         name = name,
                         category = selectedCategory,
                         description = description,
-                        selectedPlayerIds = selectedPlayerIds.toList()
+                        // TODO: Mientras PlayerRepository sea simulado (Mock), forzamos lista vacía 
+                        // para evitar IDs locales en Firebase. La UI mantiene selecciones pero no se envían.
+                        selectedPlayerIds = emptyList()
                     )
-                    onTeamCreated()
                 }
             },
-            enabled = name.isNotBlank(),
+            enabled = name.isNotBlank() && !isLoading,
             modifier = Modifier
                 .fillMaxWidth()
                 .height(50.dp),
@@ -274,11 +296,15 @@ fun CreateTeamScreen(
             ),
             shape = RoundedCornerShape(12.dp)
         ) {
-            Text(
-                text = "Crear equipo",
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Bold
-            )
+            if (isLoading) {
+                CircularProgressIndicator(color = Color.Black, modifier = Modifier.padding(2.dp))
+            } else {
+                Text(
+                    text = "Crear equipo",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
         }
     }
 }

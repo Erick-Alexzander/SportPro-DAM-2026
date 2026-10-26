@@ -1,6 +1,9 @@
 package devs.grupo5.sportpro.presentation.auth
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
@@ -26,6 +29,21 @@ fun AuthNavGraph(
     navController: NavHostController = rememberNavController(),
     authViewModel: AuthViewModel = viewModel()
 ) {
+    val currentUser by authViewModel.currentUser.collectAsState()
+
+    // Auto-navegación exclusiva impulsada por estado.
+    // Resuelve las condiciones de carrera y la navegación duplicada.
+    LaunchedEffect(currentUser) {
+        val user = currentUser
+        if (user != null) {
+            val currentRoute = navController.currentDestination?.route
+            // Solo navegamos si estamos en pantallas de autenticación
+            if (currentRoute == AuthRoutes.WELCOME || currentRoute == AuthRoutes.LOGIN || currentRoute == AuthRoutes.REGISTER_ROLE) {
+                navigateByRole(navController, user.role)
+            }
+        }
+    }
+
     NavHost(
         navController = navController,
         startDestination = AuthRoutes.WELCOME
@@ -52,8 +70,8 @@ fun AuthNavGraph(
                 onCreateAccountClick = {
                     navController.navigate(AuthRoutes.REGISTER_PERSONAL)
                 },
-                onLoginSuccess = { role ->
-                    navigateByRole(navController, role)
+                onLoginSuccess = { 
+                    // Delegado al LaunchedEffect reactivo para evitar doble navegación
                 }
             )
         }
@@ -84,8 +102,8 @@ fun AuthNavGraph(
                 onBack = {
                     navController.popBackStack()
                 },
-                onRegisterSuccess = { role ->
-                    navigateByRole(navController, role)
+                onRegisterSuccess = { 
+                    // Delegado al LaunchedEffect reactivo para evitar doble navegación
                 }
             )
         }
