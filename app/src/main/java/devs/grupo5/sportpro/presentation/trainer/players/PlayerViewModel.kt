@@ -1,19 +1,21 @@
 package devs.grupo5.sportpro.presentation.trainer.players
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import devs.grupo5.sportpro.data.model.Player
 import devs.grupo5.sportpro.data.repository.MockPlayerRepository
-import devs.grupo5.sportpro.data.repository.MockTeamRepository
+import devs.grupo5.sportpro.data.repository.FirebaseTeamRepository
 import devs.grupo5.sportpro.data.repository.PlayerRepository
 import devs.grupo5.sportpro.data.repository.TeamRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import java.time.LocalDate
 
 class PlayerViewModel(
     private val playerRepository: PlayerRepository = MockPlayerRepository.instance,
-    private val teamRepository: TeamRepository = MockTeamRepository.instance
+    private val teamRepository: TeamRepository = FirebaseTeamRepository.instance
 ) : ViewModel() {
 
     val players: StateFlow<List<Player>> = playerRepository.players
@@ -110,7 +112,14 @@ class PlayerViewModel(
         }
 
         if (teamId != null && teamId.isNotBlank()) {
-            teamRepository.addPlayerToTeam(teamId, playerToSave.id)
+            if (playerRepository is MockPlayerRepository) {
+                // TODO: Evitar guardar IDs simulados de jugadores en un FirebaseTeamRepository real
+                // Se retrasa esta inserción hasta que PlayerRepository se migre completamente a Firestore.
+            } else {
+                viewModelScope.launch {
+                    teamRepository.addPlayerToTeam(teamId, playerToSave.id)
+                }
+            }
         }
 
         // Reset draft

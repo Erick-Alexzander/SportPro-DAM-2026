@@ -7,13 +7,18 @@ import kotlinx.coroutines.flow.asStateFlow
 
 interface TeamRepository {
     val teams: StateFlow<List<Team>>
+    val syncError: StateFlow<String?>
     fun getTeamById(id: String): Team?
-    fun addTeam(team: Team)
-    fun addPlayerToTeam(teamId: String, playerId: String)
-    fun removePlayerFromTeam(teamId: String, playerId: String)
+    suspend fun addTeam(team: Team): Result<Unit>
+    suspend fun updateTeam(team: Team): Result<Unit>
+    suspend fun addPlayerToTeam(teamId: String, playerId: String): Result<Unit>
+    suspend fun removePlayerFromTeam(teamId: String, playerId: String): Result<Unit>
 }
 
 class MockTeamRepository private constructor() : TeamRepository {
+
+    private val _syncError = MutableStateFlow<String?>(null)
+    override val syncError: StateFlow<String?> = _syncError.asStateFlow()
 
     private val initialTeams = listOf(
         Team(
@@ -52,7 +57,7 @@ class MockTeamRepository private constructor() : TeamRepository {
         return _teams.value.find { it.id == id }
     }
 
-    override fun addTeam(team: Team) {
+    override suspend fun addTeam(team: Team): Result<Unit> {
         val newTeam = if (team.id.isEmpty()) {
             team.copy(
                 id = "t_${System.currentTimeMillis()}",
@@ -62,9 +67,17 @@ class MockTeamRepository private constructor() : TeamRepository {
             team.copy(playerCount = team.playerIds.size)
         }
         _teams.value = _teams.value + newTeam
+        return Result.success(Unit)
     }
 
-    override fun addPlayerToTeam(teamId: String, playerId: String) {
+    override suspend fun updateTeam(team: Team): Result<Unit> {
+        _teams.value = _teams.value.map {
+            if (it.id == team.id) team else it
+        }
+        return Result.success(Unit)
+    }
+
+    override suspend fun addPlayerToTeam(teamId: String, playerId: String): Result<Unit> {
         _teams.value = _teams.value.map { team ->
             if (team.id == teamId) {
                 if (playerId !in team.playerIds) {
@@ -73,15 +86,17 @@ class MockTeamRepository private constructor() : TeamRepository {
                 } else team
             } else team
         }
+        return Result.success(Unit)
     }
 
-    override fun removePlayerFromTeam(teamId: String, playerId: String) {
+    override suspend fun removePlayerFromTeam(teamId: String, playerId: String): Result<Unit> {
         _teams.value = _teams.value.map { team ->
             if (team.id == teamId) {
                 val updatedIds = team.playerIds.filter { it != playerId }
                 team.copy(playerIds = updatedIds, playerCount = updatedIds.size)
             } else team
         }
+        return Result.success(Unit)
     }
 
     companion object {
