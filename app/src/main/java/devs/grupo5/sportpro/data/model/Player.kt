@@ -16,5 +16,12 @@ data class Player(
     val parentName: String = "",
     val parentRelation: String = "",
     val parentPhone: String = "",
-    val emergencyPhone: String = ""
+    val emergencyPhone: String = "",
+    val privacySettings: PrivacySettings = PrivacySettings()
+)
+
+data class PrivacySettings(
+    val profilePhoto: String = "Público",
+    val fullNameVisibility: String = "Público",
+    val statsVisibility: String = "Restringido"
 )

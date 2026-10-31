@@ -57,16 +57,21 @@ fun PlayerResponsibleScreen(
 ) {
     var parentName by remember { mutableStateOf(viewModel.registrationDraft.parentName) }
     var parentRelation by remember { mutableStateOf(viewModel.registrationDraft.parentRelation) }
-    var parentPhone by remember { mutableStateOf(viewModel.registrationDraft.parentPhone) }
-    var emergencyPhone by remember { mutableStateOf(viewModel.registrationDraft.emergencyPhone) }
-
     val age = viewModel.registrationDraft.age
     val isMinor = age < 18
+    
+    fun isValidPeruvianPhone(value: String): Boolean {
+        return value.length == 9 && value.startsWith("9") && value.all { it.isDigit() }
+    }
+
+    var parentPhone by remember { mutableStateOf(viewModel.registrationDraft.parentPhone.filter { it.isDigit() }.removePrefix("51")) }
+    var emergencyPhone by remember { mutableStateOf(viewModel.registrationDraft.emergencyPhone.filter { it.isDigit() }.removePrefix("51")) }
+    var showErrors by remember { mutableStateOf(false) }
 
     val isValid = if (isMinor) {
-        parentName.isNotBlank() && parentRelation.isNotBlank() && parentPhone.isNotBlank() && emergencyPhone.isNotBlank()
+        parentName.isNotBlank() && parentRelation.isNotBlank() && isValidPeruvianPhone(parentPhone) && isValidPeruvianPhone(emergencyPhone)
     } else {
-        true // Adult player: responsible fields are optional
+        (parentPhone.isBlank() || isValidPeruvianPhone(parentPhone)) && (emergencyPhone.isBlank() || isValidPeruvianPhone(emergencyPhone))
     }
 
     LazyColumn(
@@ -230,9 +235,14 @@ fun PlayerResponsibleScreen(
 
             OutlinedTextField(
                 value = parentPhone,
-                onValueChange = { parentPhone = it },
+                onValueChange = { newValue -> 
+                    parentPhone = newValue.filter { it.isDigit() }
+                },
                 label = { Text(if (isMinor) "Teléfono de contacto *" else "Teléfono de contacto (opcional)", color = SportProTextSecondary) },
                 singleLine = true,
+                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Phone),
+                prefix = { Text("+51 ", color = SportProTextSecondary) },
+                isError = showErrors && parentPhone.isNotBlank() && !isValidPeruvianPhone(parentPhone),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedContainerColor = SportProCardBackground,
                     unfocusedContainerColor = SportProCardBackground,
@@ -244,14 +254,22 @@ fun PlayerResponsibleScreen(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp)
             )
+            if (showErrors && parentPhone.isNotBlank() && !isValidPeruvianPhone(parentPhone)) {
+                Text("Debe ingresar exactamente 9 dígitos y empezar con 9", color = SportProWarning, fontSize = 11.sp)
+            }
 
             Spacer(modifier = Modifier.height(12.dp))
 
             OutlinedTextField(
                 value = emergencyPhone,
-                onValueChange = { emergencyPhone = it },
+                onValueChange = { newValue -> 
+                    emergencyPhone = newValue.filter { it.isDigit() }
+                },
                 label = { Text(if (isMinor) "Teléfono de emergencia *" else "Teléfono de emergencia (opcional)", color = SportProTextSecondary) },
                 singleLine = true,
+                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Phone),
+                prefix = { Text("+51 ", color = SportProTextSecondary) },
+                isError = showErrors && emergencyPhone.isNotBlank() && !isValidPeruvianPhone(emergencyPhone),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedContainerColor = SportProCardBackground,
                     unfocusedContainerColor = SportProCardBackground,
@@ -263,6 +281,9 @@ fun PlayerResponsibleScreen(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp)
             )
+            if (showErrors && emergencyPhone.isNotBlank() && !isValidPeruvianPhone(emergencyPhone)) {
+                Text("Debe ingresar exactamente 9 dígitos y empezar con 9", color = SportProWarning, fontSize = 11.sp)
+            }
 
             Spacer(modifier = Modifier.height(28.dp))
         }
@@ -271,12 +292,15 @@ fun PlayerResponsibleScreen(
         item {
             Button(
                 onClick = {
+                    showErrors = true
                     if (isValid) {
+                        val finalParentPhone = if (parentPhone.isNotBlank()) "+51 $parentPhone" else ""
+                        val finalEmergencyPhone = if (emergencyPhone.isNotBlank()) "+51 $emergencyPhone" else ""
                         viewModel.updateResponsibleData(
-                            parentPhone = parentPhone,
+                            parentPhone = finalParentPhone,
                             parentName = parentName,
                             parentRelation = parentRelation,
-                            emergencyPhone = emergencyPhone
+                            emergencyPhone = finalEmergencyPhone
                         )
                         viewModel.registerPlayer()
                         onPlayerRegistered()

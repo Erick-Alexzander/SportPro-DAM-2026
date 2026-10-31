@@ -54,15 +54,17 @@ interface ParentRepository {
 }
 
 class MockParentRepository private constructor(
-    private val storage: ParentStorage? = null
+    private val context: Context? = null
 ) : ParentRepository {
+    
+    private var storage: ParentStorage? = null
 
     private val _guardian = MutableStateFlow(
         GuardianProfile(
             firstName = "María",
             lastName = "González",
             email = "maria.gonzalez@sportpro.com",
-            title = GuardianTitle.APODERADA
+            title = GuardianTitle.APODERADO
         )
     )
     override val guardian: StateFlow<GuardianProfile> = _guardian.asStateFlow()
@@ -131,6 +133,15 @@ class MockParentRepository private constructor(
     override val notifications: StateFlow<List<ParentNotification>> = _notifications.asStateFlow()
 
     init {
+        // Initial setup handled dynamically in initFrom
+    }
+
+    override fun initFrom(user: UserProfile) {
+        val uid = user.uid.ifBlank { "anonymous" }
+        context?.let { ctx ->
+            storage = ParentStorage(ctx, uid)
+        }
+        
         storage?.let { store ->
             store.loadGuardian()?.let { _guardian.value = it }
             val stored = store.loadChildren()
@@ -139,12 +150,13 @@ class MockParentRepository private constructor(
                 _selectedChildId.value = store.loadSelectedChildId()
                     ?.takeIf { id -> stored.any { it.id == id } }
                     ?: stored.first().id
+            } else {
+                _linkedChildren.value = emptyList() // Clear previous mock data from memory
+                _selectedChildId.value = null
             }
             store.loadPayment()?.let { _payment.value = it }
         }
-    }
-
-    override fun initFrom(user: UserProfile) {
+        
         _guardian.value = _guardian.value.copy(
             firstName = user.firstName.ifBlank { _guardian.value.firstName },
             lastName = user.lastName.ifBlank { _guardian.value.lastName },
@@ -222,7 +234,7 @@ class MockParentRepository private constructor(
          */
         fun getInstance(context: Context? = null): MockParentRepository {
             return instance ?: synchronized(this) {
-                instance ?: MockParentRepository(context?.let { ParentStorage(it) }).also { instance = it }
+                instance ?: MockParentRepository(context).also { instance = it }
             }
         }
     }

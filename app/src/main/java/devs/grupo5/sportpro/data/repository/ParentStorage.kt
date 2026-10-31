@@ -17,10 +17,10 @@ import org.json.JSONObject
  * conserva los datos de los menores vinculados (incluidos los datos físicos y de contacto), los del
  * apoderado responsable y el estado de la mensualidad entre sesiones de la aplicación.
  */
-class ParentStorage(context: Context) {
+class ParentStorage(context: Context, val uid: String) {
 
     private val prefs: SharedPreferences = context.applicationContext
-        .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        .getSharedPreferences("${PREFS_NAME}_$uid", Context.MODE_PRIVATE)
 
     fun loadGuardian(): GuardianProfile? {
         val raw = prefs.getString(KEY_GUARDIAN, null) ?: return null
@@ -111,6 +111,15 @@ class ParentStorage(context: Context) {
 
     private fun childFromJson(json: JSONObject): LinkedChild? {
         val stats = json.optJSONObject("stats")
+        val privacyJson = json.optJSONObject("privacySettings")
+        val privacySettings = if (privacyJson != null) {
+            devs.grupo5.sportpro.data.model.PrivacySettings(
+                profilePhoto = privacyJson.optString("profilePhoto", "Público"),
+                fullNameVisibility = privacyJson.optString("fullNameVisibility", "Público"),
+                statsVisibility = privacyJson.optString("statsVisibility", "Restringido")
+            )
+        } else devs.grupo5.sportpro.data.model.PrivacySettings()
+        
         return LinkedChild(
             id = json.optString("id"),
             firstName = json.optString("firstName"),
@@ -124,13 +133,15 @@ class ParentStorage(context: Context) {
             weightKg = json.optInt("weightKg"),
             phone = json.optString("phone"),
             emergencyPhone = json.optString("emergencyPhone"),
+            parentRelation = json.optString("parentRelation"),
             status = json.optString("status").ifBlank { "Activo" },
             stats = ChildStats(
                 goals = stats?.optInt("goals") ?: 0,
                 assists = stats?.optInt("assists") ?: 0,
                 matchesPlayed = stats?.optInt("matchesPlayed") ?: 0,
                 attendancePercent = stats?.optInt("attendancePercent") ?: 0
-            )
+            ),
+            privacySettings = privacySettings
         )
     }
 
@@ -147,6 +158,7 @@ class ParentStorage(context: Context) {
         put("weightKg", child.weightKg)
         put("phone", child.phone)
         put("emergencyPhone", child.emergencyPhone)
+        put("parentRelation", child.parentRelation)
         put("status", child.status)
         put(
             "stats",
@@ -155,6 +167,14 @@ class ParentStorage(context: Context) {
                 put("assists", child.stats.assists)
                 put("matchesPlayed", child.stats.matchesPlayed)
                 put("attendancePercent", child.stats.attendancePercent)
+            }
+        )
+        put(
+            "privacySettings",
+            JSONObject().apply {
+                put("profilePhoto", child.privacySettings.profilePhoto)
+                put("fullNameVisibility", child.privacySettings.fullNameVisibility)
+                put("statsVisibility", child.privacySettings.statsVisibility)
             }
         )
     }

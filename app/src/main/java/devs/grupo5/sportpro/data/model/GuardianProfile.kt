@@ -5,8 +5,7 @@ package devs.grupo5.sportpro.data.model
  * que se muestran en el encabezado del módulo.
  */
 enum class GuardianTitle(val label: String, val greeting: String) {
-    APODERADO("Apoderado", "Bienvenido,"),
-    APODERADA("Apoderada", "Bienvenida,")
+    APODERADO("Padre / Apoderado", "Bienvenido(a),")
 }
 
 /**

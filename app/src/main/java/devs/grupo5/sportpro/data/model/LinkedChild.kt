@@ -26,8 +26,10 @@ data class LinkedChild(
     val weightKg: Int = 0,
     val phone: String = "",
     val emergencyPhone: String = "",
+    val parentRelation: String = "",
     val status: String = "Activo",
-    val stats: ChildStats = ChildStats()
+    val stats: ChildStats = ChildStats(),
+    val privacySettings: PrivacySettings = PrivacySettings()
 ) {
     val fullName: String
         get() = listOf(firstName, lastName)
@@ -42,7 +44,27 @@ data class LinkedChild(
             .ifBlank { "?" }
 
     val ageLabel: String
-        get() = if (age > 0) "$age años" else "—"
+        get() = if (currentAge > 0) "$currentAge años" else "—"
+
+    val currentAge: Int
+        get() {
+            if (birthDate.isBlank()) return age
+            return try {
+                val parts = birthDate.split("/", "-", ".").mapNotNull { it.trim().toIntOrNull() }
+                if (parts.size == 3) {
+                    val (day, month, year) = if (parts[0] > 1000) Triple(parts[2], parts[1], parts[0]) else Triple(parts[0], parts[1], parts[2])
+                    val today = java.time.LocalDate.now()
+                    val bDate = java.time.LocalDate.of(year, month, day)
+                    var calculated = today.year - bDate.year
+                    if (today.monthValue < bDate.monthValue || (today.monthValue == bDate.monthValue && today.dayOfMonth < bDate.dayOfMonth)) {
+                        calculated--
+                    }
+                    calculated.coerceAtLeast(0)
+                } else age
+            } catch (_: Exception) {
+                age
+            }
+        }
 
     val heightLabel: String
         get() = if (heightCm > 0) "$heightCm cm" else "—"

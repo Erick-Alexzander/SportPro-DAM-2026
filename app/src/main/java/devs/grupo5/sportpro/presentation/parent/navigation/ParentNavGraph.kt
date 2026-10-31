@@ -47,6 +47,10 @@ object ParentRoutes {
     const val CALENDAR = "parent_calendar"
     const val ANNOUNCEMENTS = "parent_announcements"
     const val PROFILE = "parent_profile"
+    const val CHILDREN_PRIVACY_LIST = "parent_children_privacy"
+    const val CHILDREN_PRIVACY_DETAIL = "parent_children_privacy_detail/{childId}"
+    
+    fun childrenPrivacyDetail(childId: String) = "parent_children_privacy_detail/$childId"
 }
 
 @Composable
@@ -75,9 +79,9 @@ fun ParentMainContainerScreen(
     var showNotificationsDialog by rememberSaveable { mutableStateOf(false) }
     var showPaymentDialog by rememberSaveable { mutableStateOf(false) }
     var showStatsDialog by rememberSaveable { mutableStateOf(false) }
-    var showPrivacyDialog by rememberSaveable { mutableStateOf(false) }
     var physicalDialogTarget by remember { mutableStateOf<LinkedChild?>(null) }
     var contactDialogTarget by remember { mutableStateOf<LinkedChild?>(null) }
+    var createAccessTarget by remember { mutableStateOf<LinkedChild?>(null) }
     var eventMessage by rememberSaveable { mutableStateOf<String?>(null) }
 
     LaunchedEffect(currentUser) {
@@ -86,11 +90,11 @@ fun ParentMainContainerScreen(
 
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route ?: ParentRoutes.HOME
-    val currentTab = when (currentRoute) {
-        ParentRoutes.CHILD -> ParentTab.CHILD
-        ParentRoutes.CALENDAR -> ParentTab.CALENDAR
-        ParentRoutes.ANNOUNCEMENTS -> ParentTab.ANNOUNCEMENTS
-        ParentRoutes.PROFILE -> ParentTab.PROFILE
+    val currentTab = when {
+        currentRoute.startsWith(ParentRoutes.CHILD) && !currentRoute.startsWith("parent_children_privacy") -> ParentTab.CHILD
+        currentRoute.startsWith(ParentRoutes.CALENDAR) -> ParentTab.CALENDAR
+        currentRoute.startsWith(ParentRoutes.ANNOUNCEMENTS) -> ParentTab.ANNOUNCEMENTS
+        currentRoute.startsWith(ParentRoutes.PROFILE) || currentRoute.startsWith("parent_children_privacy") -> ParentTab.PROFILE
         else -> ParentTab.HOME
     }
 
@@ -154,7 +158,8 @@ fun ParentMainContainerScreen(
                         },
                         onUnlinkChildClick = { child -> parentRepository.unlinkChild(child.id) },
                         onEditPhysicalDataClick = { child -> physicalDialogTarget = child },
-                        onEditContactClick = { child -> contactDialogTarget = child }
+                        onEditContactClick = { child -> contactDialogTarget = child },
+                        onCreateAccessClick = { child -> createAccessTarget = child }
                     )
                 }
 
@@ -184,10 +189,38 @@ fun ParentMainContainerScreen(
                         unreadNotifications = notifications.count { !it.isRead },
                         onEditProfileClick = { showEditProfileDialog = true },
                         onNotificationsClick = { showNotificationsDialog = true },
-                        onPrivacyClick = { showPrivacyDialog = true },
+                        onPrivacyClick = { navController.navigate(ParentRoutes.CHILDREN_PRIVACY_LIST) },
                         onPaymentClick = { showPaymentDialog = true },
                         onLogoutClick = onLogoutSuccess
                     )
+                }
+                
+                composable(ParentRoutes.CHILDREN_PRIVACY_LIST) {
+                    devs.grupo5.sportpro.presentation.parent.privacy.ChildrenPrivacyListScreen(
+                        children = linkedChildren,
+                        onBackClick = { navController.popBackStack() },
+                        onChildSelected = { childId ->
+                            navController.navigate(ParentRoutes.childrenPrivacyDetail(childId))
+                        }
+                    )
+                }
+                
+                composable(
+                    route = ParentRoutes.CHILDREN_PRIVACY_DETAIL,
+                    arguments = listOf(androidx.navigation.navArgument("childId") { type = androidx.navigation.NavType.StringType })
+                ) { backStackEntry ->
+                    val childId = backStackEntry.arguments?.getString("childId") ?: ""
+                    val selectedForPrivacy = linkedChildren.find { it.id == childId }
+                    if (selectedForPrivacy != null) {
+                        devs.grupo5.sportpro.presentation.parent.privacy.ChildPrivacyDetailScreen(
+                            child = selectedForPrivacy,
+                            onBackClick = { navController.popBackStack() },
+                            onSaveClick = { updatedChild ->
+                                parentRepository.updateChild(updatedChild)
+                                navController.popBackStack()
+                            }
+                        )
+                    }
                 }
             }
         }
@@ -268,13 +301,10 @@ fun ParentMainContainerScreen(
         )
     }
 
-    if (showPrivacyDialog) {
-        SimpleInfoDialog(
-            title = "Privacidad del menor",
-            message = "Los datos personales, de contacto, emergencia y físicos del menor no son públicos. " +
-                "Solo el administrador de la academia y el apoderado responsable pueden consultarlos. " +
-                "SportPro no comparte información con terceros.",
-            onDismiss = { showPrivacyDialog = false }
+    createAccessTarget?.let { child ->
+        devs.grupo5.sportpro.presentation.parent.dialogs.CreateChildAccessDialog(
+            child = child,
+            onDismiss = { createAccessTarget = null }
         )
     }
 

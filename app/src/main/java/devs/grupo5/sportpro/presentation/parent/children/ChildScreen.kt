@@ -87,7 +87,8 @@ fun ChildScreen(
     onEditChildClick: (LinkedChild) -> Unit = {},
     onUnlinkChildClick: (LinkedChild) -> Unit = {},
     onEditPhysicalDataClick: (LinkedChild) -> Unit = {},
-    onEditContactClick: (LinkedChild) -> Unit = {}
+    onEditContactClick: (LinkedChild) -> Unit = {},
+    onCreateAccessClick: (LinkedChild) -> Unit = {}
 ) {
     var childToUnlink by remember { mutableStateOf<LinkedChild?>(null) }
     val context = LocalContext.current
@@ -215,6 +216,24 @@ fun ChildScreen(
                     onCall = { number -> context.dialPhone(number) },
                     onCopy = { number -> context.copyPhone(number) }
                 )
+            }
+
+            item {
+                Button(
+                    onClick = { onCreateAccessClick(child) },
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = ParentNeonGreen,
+                        contentColor = Color.Black
+                    )
+                ) {
+                    Text(
+                        text = "Crear acceso para el menor",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp
+                    )
+                }
             }
 
             item {

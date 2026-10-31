@@ -286,8 +286,8 @@ private fun AccountInfoCard(
                 label = "Menores vinculados",
                 value = when (children.size) {
                     0 -> "Sin vincular"
-                    1 -> children.first().fullName.ifBlank { "1 menor" }
-                    else -> "${children.size} menores · ${children.joinToString(", ") { it.firstName }}"
+                    1 -> "${children.first().fullName.ifBlank { "1 menor" }} (${children.first().parentRelation.ifBlank { "Responsable" }})"
+                    else -> "${children.size} menores · ${children.joinToString(", ") { "${it.firstName} (${it.parentRelation.ifBlank { "Responsable" }})" }}"
                 }
             )
             HorizontalDivider(

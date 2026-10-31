@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.NotificationsNone
 import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -81,13 +82,17 @@ fun RegisterChildDialog(
     var firstName by remember { mutableStateOf(initialChild?.firstName.orEmpty()) }
     var lastName by remember { mutableStateOf(initialChild?.lastName.orEmpty()) }
     var category by remember { mutableStateOf(initialChild?.category ?: "Sub-15") }
-    var age by remember { mutableStateOf(initialChild?.age?.takeIf { it > 0 }?.toString().orEmpty()) }
+    var birthDate by remember { mutableStateOf(initialChild?.birthDateIso.orEmpty()) }
     var jerseyNumber by remember { mutableStateOf(initialChild?.jerseyNumber?.takeIf { it > 0 }?.toString().orEmpty()) }
     var position by remember { mutableStateOf(initialChild?.position ?: "DEL") }
+    var parentRelation by remember { mutableStateOf(initialChild?.parentRelation.orEmpty()) }
     var showErrors by remember { mutableStateOf(false) }
+    var showDatePicker by remember { mutableStateOf(false) }
 
+    val relations = listOf("Padre", "Madre", "Apoderado(a)")
+    
     val isEditing = initialChild != null
-    val isValid = firstName.isNotBlank() && lastName.isNotBlank() &&
+    val isValid = firstName.isNotBlank() && lastName.isNotBlank() && parentRelation.isNotBlank() && birthDate.isNotBlank() &&
         (jerseyNumber.toIntOrNull() ?: 0) in 1..99
 
     AlertDialog(
@@ -137,14 +142,21 @@ fun RegisterChildDialog(
                 )
 
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    ParentDialogField(
-                        label = "EDAD",
-                        value = age,
-                        onValueChange = { age = it.filter(Char::isDigit).take(2) },
-                        placeholder = "15",
-                        modifier = Modifier.weight(1f),
-                        keyboardType = KeyboardType.Number
-                    )
+                    Box(modifier = Modifier.weight(1f)) {
+                        ParentDialogField(
+                            label = "FECHA NAC.",
+                            value = birthDate,
+                            onValueChange = {},
+                            placeholder = "2010-05-18",
+                            readOnly = true,
+                            isError = showErrors && birthDate.isBlank()
+                        )
+                        Box(
+                            modifier = Modifier
+                                .matchParentSize()
+                                .clickable { showDatePicker = true }
+                        )
+                    }
                     ParentDialogField(
                         label = "N° CAMISETA",
                         value = jerseyNumber,
@@ -168,6 +180,22 @@ fun RegisterChildDialog(
                     selected = position,
                     onSelected = { position = it }
                 )
+                
+                Text(
+                    text = "TU RELACIÓN CON EL MENOR",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    letterSpacing = 1.sp,
+                    color = ParentNeonGreen
+                )
+                ParentOptionRow(
+                    options = relations,
+                    selected = parentRelation,
+                    onSelected = { parentRelation = it }
+                )
+                if (showErrors && parentRelation.isBlank()) {
+                    Text("Debe especificar su relación con el menor", color = ParentWarning, fontSize = 11.sp)
+                }
 
                 Row(
                     modifier = Modifier
@@ -204,9 +232,10 @@ fun RegisterChildDialog(
                                 firstName = firstName.trim(),
                                 lastName = lastName.trim(),
                                 category = category,
-                                age = age.toIntOrNull() ?: 0,
+                                birthDate = birthDate,
                                 jerseyNumber = jerseyNumber.toIntOrNull() ?: 0,
-                                position = position
+                                position = position,
+                                parentRelation = parentRelation
                             )
                         )
                     }
@@ -230,6 +259,16 @@ fun RegisterChildDialog(
             }
         }
     )
+
+    if (showDatePicker) {
+        ParentDatePickerDialog(
+            initialDateStr = birthDate,
+            onDismiss = { showDatePicker = false },
+            onDateSelected = { date ->
+                birthDate = date
+            }
+        )
+    }
 }
 
 /**
@@ -244,7 +283,6 @@ fun EditProfileDialog(
     var firstName by remember { mutableStateOf(profile.firstName) }
     var lastName by remember { mutableStateOf(profile.lastName) }
     var email by remember { mutableStateOf(profile.email) }
-    var title by remember { mutableStateOf(profile.title) }
     var showErrors by remember { mutableStateOf(false) }
 
     val isValid = firstName.isNotBlank() && lastName.isNotBlank() && email.contains("@")
@@ -290,20 +328,7 @@ fun EditProfileDialog(
                     isError = showErrors && !email.contains("@")
                 )
 
-                Text(
-                    text = "ROL",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    letterSpacing = 1.sp,
-                    color = ParentNeonGreen
-                )
-                ParentOptionRow(
-                    options = GuardianTitle.entries.map { it.label },
-                    selected = title.label,
-                    onSelected = { label ->
-                        title = GuardianTitle.entries.first { it.label == label }
-                    }
-                )
+                // Rol visual removed since it's just Padre / Apoderado uniformly
             }
         },
         confirmButton = {
@@ -315,8 +340,7 @@ fun EditProfileDialog(
                             profile.copy(
                                 firstName = firstName.trim(),
                                 lastName = lastName.trim(),
-                                email = email.trim(),
-                                title = title
+                                email = email.trim()
                             )
                         )
                     }
@@ -692,17 +716,29 @@ fun ChildPhysicalDataDialog(
     onDismiss: () -> Unit = {},
     onSave: (LinkedChild) -> Unit = {}
 ) {
-    var age by remember { mutableStateOf(child.age.takeIf { it > 0 }?.toString().orEmpty()) }
     var birthDate by remember { mutableStateOf(child.birthDateIso) }
     var height by remember { mutableStateOf(child.heightCm.takeIf { it > 0 }?.toString().orEmpty()) }
     var weight by remember { mutableStateOf(child.weightKg.takeIf { it > 0 }?.toString().orEmpty()) }
     var showErrors by remember { mutableStateOf(false) }
+    var showDatePicker by remember { mutableStateOf(false) }
+    
+    val computedAge = remember(birthDate) {
+        if (birthDate.isBlank()) 0 else {
+            runCatching {
+                val date = java.time.LocalDate.parse(birthDate)
+                val today = java.time.LocalDate.now()
+                var a = today.year - date.year
+                if (today.monthValue < date.monthValue || (today.monthValue == date.monthValue && today.dayOfMonth < date.dayOfMonth)) {
+                    a--
+                }
+                a.coerceAtLeast(0)
+            }.getOrDefault(0)
+        }
+    }
 
-    val ageValue = age.toIntOrNull() ?: 0
     val heightValue = height.toIntOrNull() ?: 0
     val weightValue = weight.toIntOrNull() ?: 0
-    val isValid = ageValue in 1..25 &&
-        heightValue in 80..250 &&
+    val isValid = heightValue in 80..250 &&
         weightValue in 20..200 &&
         birthDate.isValidBirthDate()
 
@@ -726,22 +762,28 @@ fun ChildPhysicalDataDialog(
             ) {
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     ParentDialogField(
-                        label = "EDAD",
-                        value = age,
-                        onValueChange = { age = it.filter(Char::isDigit).take(2) },
-                        placeholder = "14",
+                        label = "EDAD (AUTO)",
+                        value = if (computedAge > 0) computedAge.toString() else "-",
+                        onValueChange = { },
+                        placeholder = "-",
                         modifier = Modifier.weight(1f),
-                        keyboardType = KeyboardType.Number,
-                        isError = showErrors && ageValue !in 1..25
+                        readOnly = true
                     )
-                    ParentDialogField(
-                        label = "FECHA NAC.",
-                        value = birthDate,
-                        onValueChange = { birthDate = it.take(10) },
-                        placeholder = "2010-05-18",
-                        modifier = Modifier.weight(1f),
-                        isError = showErrors && !birthDate.isValidBirthDate()
-                    )
+                    Box(modifier = Modifier.weight(1f)) {
+                        ParentDialogField(
+                            label = "FECHA NAC.",
+                            value = birthDate,
+                            onValueChange = {},
+                            placeholder = "2010-05-18",
+                            readOnly = true,
+                            isError = showErrors && !birthDate.isValidBirthDate()
+                        )
+                        Box(
+                            modifier = Modifier
+                                .matchParentSize()
+                                .clickable { showDatePicker = true }
+                        )
+                    }
                 }
 
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -803,7 +845,7 @@ fun ChildPhysicalDataDialog(
                     if (isValid) {
                         onSave(
                             child.copy(
-                                age = ageValue,
+                                age = computedAge,
                                 birthDate = birthDate.normalizeBirthDate(),
                                 heightCm = heightValue,
                                 weightKg = weightValue
@@ -830,6 +872,16 @@ fun ChildPhysicalDataDialog(
             }
         }
     )
+
+    if (showDatePicker) {
+        ParentDatePickerDialog(
+            initialDateStr = birthDate,
+            onDismiss = { showDatePicker = false },
+            onDateSelected = { date ->
+                birthDate = date
+            }
+        )
+    }
 }
 
 /**
@@ -841,13 +893,16 @@ fun ChildContactDialog(
     onDismiss: () -> Unit = {},
     onSave: (LinkedChild) -> Unit = {}
 ) {
-    var phone by remember { mutableStateOf(child.phone) }
-    var emergencyPhone by remember { mutableStateOf(child.emergencyPhone) }
+    // Maintain existing digits to not truncate silently if it had >9 digits previously
+    var phone by remember { mutableStateOf(child.phone.filter { it.isDigit() }.removePrefix("51")) }
+    var emergencyPhone by remember { mutableStateOf(child.emergencyPhone.filter { it.isDigit() }.removePrefix("51")) }
     var showErrors by remember { mutableStateOf(false) }
 
-    fun digitsOf(value: String): Int = value.count { it.isDigit() }
+    fun isValidPeruvianPhone(value: String): Boolean {
+        return value.length == 9 && value.startsWith("9") && value.all { it.isDigit() }
+    }
 
-    val isValid = digitsOf(phone) >= 7 && digitsOf(emergencyPhone) >= 7
+    val isValid = isValidPeruvianPhone(phone) && isValidPeruvianPhone(emergencyPhone)
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -870,19 +925,48 @@ fun ChildContactDialog(
                 ParentDialogField(
                     label = "TELÉFONO",
                     value = phone,
-                    onValueChange = { phone = it.take(20) },
-                    placeholder = "+56 9 4321 0987",
+                    onValueChange = { newValue -> 
+                        val digits = newValue.filter { it.isDigit() }
+                        if (digits.length <= 9) {
+                            phone = digits
+                        } else if (phone.length > 9) {
+                            // If the previous value was already > 9, we only allow truncation, not adding more
+                            if (digits.length < phone.length) {
+                                phone = digits
+                            }
+                        }
+                    },
+                    placeholder = "987654321",
                     keyboardType = KeyboardType.Phone,
-                    isError = showErrors && digitsOf(phone) < 7
+                    prefix = { Text("+51 ", color = ParentTextMuted) },
+                    isError = showErrors && !isValidPeruvianPhone(phone)
                 )
+                if (showErrors && !isValidPeruvianPhone(phone)) {
+                    Text("Debe ingresar exactamente 9 dígitos y empezar con 9", color = ParentWarning, fontSize = 11.sp)
+                }
+
                 ParentDialogField(
                     label = "CONTACTO DE EMERGENCIA",
                     value = emergencyPhone,
-                    onValueChange = { emergencyPhone = it.take(20) },
-                    placeholder = "+56 9 5555 0187",
+                    onValueChange = { newValue -> 
+                        val digits = newValue.filter { it.isDigit() }
+                        if (digits.length <= 9) {
+                            emergencyPhone = digits
+                        } else if (emergencyPhone.length > 9) {
+                            // If the previous value was already > 9, we only allow truncation, not adding more
+                            if (digits.length < emergencyPhone.length) {
+                                emergencyPhone = digits
+                            }
+                        }
+                    },
+                    placeholder = "987654321",
                     keyboardType = KeyboardType.Phone,
-                    isError = showErrors && digitsOf(emergencyPhone) < 7
+                    prefix = { Text("+51 ", color = ParentTextMuted) },
+                    isError = showErrors && !isValidPeruvianPhone(emergencyPhone)
                 )
+                if (showErrors && !isValidPeruvianPhone(emergencyPhone)) {
+                    Text("Debe ingresar exactamente 9 dígitos y empezar con 9", color = ParentWarning, fontSize = 11.sp)
+                }
 
                 Text(
                     text = "Desde el panel puedes llamar a estos números o copiarlos con un toque.",
@@ -898,8 +982,8 @@ fun ChildContactDialog(
                     if (isValid) {
                         onSave(
                             child.copy(
-                                phone = phone.trim(),
-                                emergencyPhone = emergencyPhone.trim()
+                                phone = "+51 $phone",
+                                emergencyPhone = "+51 $emergencyPhone"
                             )
                         )
                     }
@@ -907,6 +991,122 @@ fun ChildContactDialog(
             ) {
                 Text(
                     text = "Guardar cambios",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = ParentNeonGreen
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(
+                    text = "Cancelar",
+                    fontSize = 14.sp,
+                    color = ParentTextMuted
+                )
+            }
+        }
+    )
+}
+
+@Composable
+fun CreateChildAccessDialog(
+    child: LinkedChild,
+    onDismiss: () -> Unit
+) {
+    var email by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    var confirmPassword by remember { mutableStateOf("") }
+    var showErrors by remember { mutableStateOf(false) }
+    var statusMessage by remember { mutableStateOf<String?>(null) }
+
+    val isValid = email.isNotBlank() && email.contains("@") && password.length >= 6 && password == confirmPassword
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = ParentSurface,
+        titleContentColor = ParentTextPrimary,
+        textContentColor = ParentTextSecondary,
+        shape = RoundedCornerShape(20.dp),
+        title = {
+            Text(
+                text = "Crear acceso: ${child.firstName}",
+                fontSize = 19.sp,
+                fontWeight = FontWeight.Bold
+            )
+        },
+        text = {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    text = "El acceso estará vinculado a tu cuenta. El menor podrá entrar al módulo Jugador con estas credenciales, pero las restricciones de privacidad se mantendrán.",
+                    fontSize = 12.sp,
+                    color = ParentTextSecondary,
+                    lineHeight = 16.sp
+                )
+
+                ParentDialogField(
+                    label = "CORREO ELECTRÓNICO",
+                    value = email,
+                    onValueChange = { email = it; statusMessage = null },
+                    placeholder = "jugador@ejemplo.com",
+                    keyboardType = KeyboardType.Email,
+                    isError = showErrors && (!email.contains("@") || email.isBlank())
+                )
+                
+                ParentDialogField(
+                    label = "CONTRASEÑA",
+                    value = password,
+                    onValueChange = { password = it; statusMessage = null },
+                    placeholder = "Mínimo 6 caracteres",
+                    keyboardType = KeyboardType.Password,
+                    isError = showErrors && password.length < 6
+                )
+                
+                ParentDialogField(
+                    label = "CONFIRMAR CONTRASEÑA",
+                    value = confirmPassword,
+                    onValueChange = { confirmPassword = it; statusMessage = null },
+                    placeholder = "Repita la contraseña",
+                    keyboardType = KeyboardType.Password,
+                    isError = showErrors && password != confirmPassword
+                )
+
+                if (statusMessage != null) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(ParentWarning.copy(alpha = 0.1f))
+                            .border(1.dp, ParentWarning.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
+                            .padding(12.dp)
+                    ) {
+                        Icon(Icons.Default.Info, contentDescription = null, tint = ParentWarning, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = statusMessage!!,
+                            color = ParentWarning,
+                            fontSize = 12.sp,
+                            lineHeight = 16.sp
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    showErrors = true
+                    if (isValid) {
+                        // REQUISITO: "Indicar explícitamente qué función de backend falta."
+                        statusMessage = "Operación denegada. Falta implementar la Cloud Function autenticada en Firebase para crear cuentas sin cerrar la sesión actual del apoderado."
+                    }
+                }
+            ) {
+                Text(
+                    text = "Crear acceso",
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Bold,
                     color = ParentNeonGreen
@@ -963,7 +1163,10 @@ private fun ParentDialogField(
     placeholder: String,
     modifier: Modifier = Modifier,
     keyboardType: KeyboardType = KeyboardType.Text,
-    isError: Boolean = false
+    isError: Boolean = false,
+    prefix: @Composable (() -> Unit)? = null,
+    trailingIcon: @Composable (() -> Unit)? = null,
+    readOnly: Boolean = false
 ) {
     Column(modifier = modifier) {
         Text(
@@ -980,10 +1183,14 @@ private fun ParentDialogField(
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
             isError = isError,
+            prefix = prefix,
+            trailingIcon = trailingIcon,
+            readOnly = readOnly,
             placeholder = {
                 Text(text = placeholder, fontSize = 13.sp, color = ParentTextMuted)
             },
             keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
+            visualTransformation = if (keyboardType == KeyboardType.Password) androidx.compose.ui.text.input.PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None,
             shape = RoundedCornerShape(12.dp),
             colors = OutlinedTextFieldDefaults.colors(
                 focusedTextColor = ParentTextPrimary,
@@ -994,6 +1201,80 @@ private fun ParentDialogField(
                 unfocusedContainerColor = ParentSurfaceVariant,
                 cursorColor = ParentNeonGreen,
                 errorBorderColor = ParentWarning
+            )
+        )
+    }
+}
+
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Composable
+fun ParentDatePickerDialog(
+    initialDateStr: String,
+    onDismiss: () -> Unit,
+    onDateSelected: (String) -> Unit
+) {
+    val hoy = remember { java.time.LocalDate.now() }
+    val limiteFecha = remember(hoy) {
+        hoy.atTime(java.time.LocalTime.MAX).toInstant(java.time.ZoneOffset.UTC).toEpochMilli()
+    }
+
+    val initialDate = runCatching { java.time.LocalDate.parse(initialDateStr) }.getOrNull()
+
+    val datePickerState = androidx.compose.material3.rememberDatePickerState(
+        initialSelectedDateMillis = initialDate
+            ?.atStartOfDay(java.time.ZoneOffset.UTC)
+            ?.toInstant()
+            ?.toEpochMilli(),
+        selectableDates = remember(limiteFecha) {
+            object : androidx.compose.material3.SelectableDates {
+                override fun isSelectableDate(utcTimeMillis: Long) = utcTimeMillis <= limiteFecha
+                override fun isSelectableYear(year: Int) = year <= hoy.year
+            }
+        }
+    )
+
+    androidx.compose.material3.DatePickerDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            androidx.compose.material3.TextButton(
+                onClick = {
+                    datePickerState.selectedDateMillis?.let { millis ->
+                        val date = java.time.Instant.ofEpochMilli(millis)
+                            .atZone(java.time.ZoneOffset.UTC)
+                            .toLocalDate()
+                        onDateSelected(date.toString())
+                    }
+                    onDismiss()
+                },
+                colors = ButtonDefaults.textButtonColors(contentColor = ParentNeonGreen)
+            ) {
+                Text("Aceptar")
+            }
+        },
+        dismissButton = {
+            androidx.compose.material3.TextButton(
+                onClick = onDismiss,
+                colors = ButtonDefaults.textButtonColors(contentColor = ParentTextSecondary)
+            ) {
+                Text("Cancelar")
+            }
+        },
+        colors = androidx.compose.material3.DatePickerDefaults.colors(
+            containerColor = ParentSurface
+        )
+    ) {
+        androidx.compose.material3.DatePicker(
+            state = datePickerState,
+            colors = androidx.compose.material3.DatePickerDefaults.colors(
+                containerColor = ParentSurface,
+                titleContentColor = Color.White,
+                headlineContentColor = Color.White,
+                weekdayContentColor = ParentTextSecondary,
+                dayContentColor = Color.White,
+                todayContentColor = ParentNeonGreen,
+                todayDateBorderColor = ParentNeonGreen,
+                selectedDayContainerColor = ParentNeonGreen,
+                selectedDayContentColor = Color.Black
             )
         )
     }
