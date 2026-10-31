@@ -1,0 +1,132 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // --- FUNCIONES AUXILIARES ---
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function getRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+
+    function isTrainer() {
+      return isAuthenticated() && getRole() == 'TRAINER';
+    }
+
+    function isOwner(data) {
+      return isAuthenticated() && data.ownerUid == request.auth.uid;
+    }
+
+    function isImmutable(field) {
+      return !(field in request.resource.data.diff(resource.data).affectedKeys());
+    }
+
+    // --- REGLAS PARA USUARIOS (PERFILES) ---
+
+    match /users/{userId} {
+      allow read: if isAuthenticated() && request.auth.uid == userId;
+
+      // Creación:
+      // 1. Solo el propio UID.
+      // 2. Rol restringido a TRAINER, PLAYER, PARENT (No ADMIN).
+      // 3. Allowlist estricta de campos iniciales.
+      allow create: if isAuthenticated() && request.auth.uid == userId
+                    && request.resource.data.uid == userId
+                    && (request.resource.data.role in ['TRAINER', 'PLAYER', 'PARENT'])
+                    && request.resource.data.keys().hasOnly(['uid', 'firstName', 'lastName', 'email', 'role', 'birthDate']);
+
+      // Actualización: Bloquear escalación de privilegios
+      allow update: if isAuthenticated() && request.auth.uid == userId
+                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+                        'firstName', 'lastName', 'birthDate'
+                    ]);
+
+      allow delete: if false;
+    }
+
+    // --- REGLAS PARA EQUIPOS ---
+
+    match /teams/{teamId} {
+      allow read: if isOwner(resource.data);
+
+      // Creación:
+      // 1. Debe ser Entrenador.
+      // 2. El equipo DEBE nacer vacío (playerIds=[] y playerCount=0).
+      // 3. Allowlist estricta de campos.
+      allow create: if isTrainer()
+                    && request.resource.data.ownerUid == request.auth.uid
+                    && request.resource.data.id == teamId
+                    && request.resource.data.playerIds == []
+                    && request.resource.data.playerCount == 0
+                    && request.resource.data.keys().hasOnly(['id', 'ownerUid', 'name', 'category', 'description', 'coachName', 'playerIds', 'playerCount']);
+
+      // Actualización:
+      // 1. Solo el propietario.
+      // 2. Protegemos contra duplicados en playerIds.
+      // 3. Integridad Atómica: Si se añade un ID, debe existir el Player correspondiente (propios y vinculados).
+      allow update: if isOwner(resource.data)
+                    && isImmutable('ownerUid')
+                    && isImmutable('id')
+                    && request.resource.data.playerCount == request.resource.data.playerIds.size()
+                    && request.resource.data.playerIds.toSet().size() == request.resource.data.playerIds.size()
+                    && request.resource.data.diff(resource.data).affectedKeys()
+                        .hasOnly(['name', 'category', 'description', 'coachName', 'playerIds', 'playerCount'])
+                    && (
+                      isImmutable('playerIds') ||
+                      (
+                        // Append legítimo vía addPlayerWithTeam (Transacción)
+                        request.resource.data.playerIds.size() == resource.data.playerIds.size() + 1 &&
+                        request.resource.data.playerIds.hasAll(resource.data.playerIds) &&
+                        // El jugador NO debe existir antes de la operación (garantiza transacción de creación)
+                        !exists(/databases/$(database)/documents/players/$(request.resource.data.playerIds[resource.data.playerIds.size()])) &&
+                        getAfter(/databases/$(database)/documents/players/$(request.resource.data.playerIds[resource.data.playerIds.size()])).data.teamId == teamId &&
+                        getAfter(/databases/$(database)/documents/players/$(request.resource.data.playerIds[resource.data.playerIds.size()])).data.ownerUid == request.auth.uid
+                      )
+                    );
+
+      allow delete: if false;
+    }
+
+    // --- REGLAS PARA JUGADORES ---
+
+    match /players/{playerId} {
+      allow read: if isOwner(resource.data);
+
+      // Creación:
+      // 1. Validamos todos los campos del modelo Player.kt.
+      // 2. Integridad bidireccional atómica con el equipo.
+      allow create: if isTrainer()
+                    && request.resource.data.ownerUid == request.auth.uid
+                    && request.resource.data.id == playerId
+                    && request.resource.data.keys().hasAll(['id', 'ownerUid', 'fullName', 'category', 'status'])
+                    && request.resource.data.keys().hasOnly([
+                        'id', 'ownerUid', 'teamId', 'fullName', 'category', 'position', 'jerseyNumber',
+                        'age', 'status', 'dateOfBirth', 'contactEmail', 'dominantFoot', 'size', 'weight',
+                        'parentName', 'parentRelation', 'parentPhone', 'emergencyPhone', 'privacySettings'
+                    ])
+                    && (
+                      request.resource.data.teamId == null ||
+                      (
+                        getAfter(/databases/$(database)/documents/teams/$(request.resource.data.teamId)).data.ownerUid == request.auth.uid &&
+                        playerId in getAfter(/databases/$(database)/documents/teams/$(request.resource.data.teamId)).data.playerIds
+                      )
+                    );
+
+      allow update: if isOwner(resource.data)
+                    && isImmutable('ownerUid')
+                    && isImmutable('id')
+                    && isImmutable('teamId')
+                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+                        'fullName', 'category', 'position', 'jerseyNumber', 'age', 'status',
+                        'dateOfBirth', 'contactEmail', 'dominantFoot', 'size', 'weight',
+                        'parentName', 'parentRelation', 'parentPhone', 'emergencyPhone',
+                        'privacySettings'
+                    ]);
+
+      allow delete: if false;
+    }
+  }
+}

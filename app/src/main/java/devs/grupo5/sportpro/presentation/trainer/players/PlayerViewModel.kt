@@ -3,7 +3,7 @@ package devs.grupo5.sportpro.presentation.trainer.players
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import devs.grupo5.sportpro.data.model.Player
-import devs.grupo5.sportpro.data.repository.MockPlayerRepository
+import devs.grupo5.sportpro.data.repository.FirebasePlayerRepository
 import devs.grupo5.sportpro.data.repository.FirebaseTeamRepository
 import devs.grupo5.sportpro.data.repository.PlayerRepository
 import devs.grupo5.sportpro.data.repository.TeamRepository
@@ -14,17 +14,21 @@ import kotlinx.coroutines.launch
 import java.time.LocalDate
 
 class PlayerViewModel(
-    private val playerRepository: PlayerRepository = MockPlayerRepository.instance,
+    private val playerRepository: PlayerRepository = FirebasePlayerRepository.instance,
     private val teamRepository: TeamRepository = FirebaseTeamRepository.instance
 ) : ViewModel() {
 
     val players: StateFlow<List<Player>> = playerRepository.players
+    val syncError: StateFlow<String?> = playerRepository.syncError
 
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
 
     private val _selectedCategory = MutableStateFlow("Todos")
     val selectedCategory: StateFlow<String> = _selectedCategory.asStateFlow()
+
+    private val _isLoading = MutableStateFlow(false)
+    val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
     // Draft registration state
     var registrationDraft = Player()
@@ -92,39 +96,27 @@ class PlayerViewModel(
         )
     }
 
-    fun registerPlayer(teamIdOverride: String? = null): Player {
-        val teamId = teamIdOverride ?: currentTeamIdForRegistration
-        val name = registrationDraft.fullName
-
-        // Check if player already exists to avoid unnecessary duplicate creation
-        val existing = playerRepository.players.value.find { 
-            it.fullName.equals(name, ignoreCase = true) && it.category.equals(registrationDraft.category, ignoreCase = true)
-        }
-
-        val playerToSave = if (existing != null) {
-            existing
-        } else {
-            val newP = if (registrationDraft.id.isEmpty()) {
-                registrationDraft.copy(id = "p_${System.currentTimeMillis()}")
-            } else registrationDraft
-            playerRepository.addPlayer(newP)
-            newP
-        }
-
-        if (teamId != null && teamId.isNotBlank()) {
-            if (playerRepository is MockPlayerRepository) {
-                // TODO: Evitar guardar IDs simulados de jugadores en un FirebaseTeamRepository real
-                // Se retrasa esta inserción hasta que PlayerRepository se migre completamente a Firestore.
+    fun registerPlayer(onResult: (Boolean) -> Unit = {}) {
+        val teamId = currentTeamIdForRegistration
+        
+        viewModelScope.launch {
+            _isLoading.value = true
+            
+            val result = if (teamId != null) {
+                playerRepository.addPlayerWithTeam(registrationDraft, teamId)
             } else {
-                viewModelScope.launch {
-                    teamRepository.addPlayerToTeam(teamId, playerToSave.id)
-                }
+                playerRepository.addPlayer(registrationDraft)
             }
+            
+            if (result.isSuccess) {
+                // Reset draft
+                registrationDraft = Player()
+                currentTeamIdForRegistration = null
+                onResult(true)
+            } else {
+                onResult(false)
+            }
+            _isLoading.value = false
         }
-
-        // Reset draft
-        registrationDraft = Player()
-        currentTeamIdForRegistration = null
-        return playerToSave
     }
 }

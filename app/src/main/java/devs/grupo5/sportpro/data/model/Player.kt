@@ -2,6 +2,8 @@ package devs.grupo5.sportpro.data.model
 
 data class Player(
     val id: String = "",
+    val ownerUid: String = "",
+    val teamId: String? = null,
     val fullName: String = "",
     val category: String = "", // "Primera", "Sub-15", "Sub-10"
     val position: String = "", // "POR", "DEF", "MED", "DEL"

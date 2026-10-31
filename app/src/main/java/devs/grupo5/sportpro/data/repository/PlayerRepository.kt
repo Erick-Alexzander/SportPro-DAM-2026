@@ -7,13 +7,18 @@ import kotlinx.coroutines.flow.asStateFlow
 
 interface PlayerRepository {
     val players: StateFlow<List<Player>>
+    val syncError: StateFlow<String?>
     fun getPlayerById(id: String): Player?
     fun getPlayersByIds(ids: List<String>): List<Player>
-    fun addPlayer(player: Player)
-    fun updatePlayer(player: Player)
+    suspend fun addPlayer(player: Player): Result<Unit>
+    suspend fun addPlayerWithTeam(player: Player, teamId: String): Result<Unit>
+    suspend fun updatePlayer(player: Player): Result<Unit>
 }
 
 class MockPlayerRepository private constructor() : PlayerRepository {
+
+    private val _syncError = MutableStateFlow<String?>(null)
+    override val syncError: StateFlow<String?> = _syncError.asStateFlow()
 
     private val initialPlayers = listOf(
         Player(
@@ -173,19 +178,25 @@ class MockPlayerRepository private constructor() : PlayerRepository {
         return _players.value.filter { it.id in ids }
     }
 
-    override fun addPlayer(player: Player) {
+    override suspend fun addPlayer(player: Player): Result<Unit> {
         val newPlayer = if (player.id.isEmpty()) {
             player.copy(id = "p_${System.currentTimeMillis()}")
         } else {
             player
         }
         _players.value = _players.value + newPlayer
+        return Result.success(Unit)
     }
 
-    override fun updatePlayer(player: Player) {
+    override suspend fun addPlayerWithTeam(player: Player, teamId: String): Result<Unit> {
+        return addPlayer(player.copy(teamId = teamId))
+    }
+
+    override suspend fun updatePlayer(player: Player): Result<Unit> {
         _players.value = _players.value.map {
             if (it.id == player.id) player else it
         }
+        return Result.success(Unit)
     }
 
     companion object {

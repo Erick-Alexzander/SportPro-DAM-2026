@@ -43,10 +43,11 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import devs.grupo5.sportpro.data.model.Player
 import devs.grupo5.sportpro.data.model.PrivacySettings
-import devs.grupo5.sportpro.data.repository.MockPlayerRepository
+import devs.grupo5.sportpro.data.repository.FirebasePlayerRepository
 import devs.grupo5.sportpro.data.repository.PlayerRepository
 import devs.grupo5.sportpro.presentation.player.components.PlayerBottomNavigationBar
 import devs.grupo5.sportpro.presentation.player.components.PlayerTab
@@ -61,10 +62,9 @@ import devs.grupo5.sportpro.presentation.player.theme.PlayerTextPrimary
 import devs.grupo5.sportpro.presentation.player.theme.PlayerTextSecondary
 import devs.grupo5.sportpro.presentation.player.theme.PlayerWarning
 import devs.grupo5.sportpro.presentation.player.theme.SportProPlayerTheme
+import kotlinx.coroutines.launch
 
 private val visibilityOptions = listOf("Público", "Restringido", "Solo autorizados")
-
-
 
 private fun optionColor(option: String): Color = when (option) {
     "Público" -> PlayerNeonGreen
@@ -73,7 +73,7 @@ private fun optionColor(option: String): Color = when (option) {
 }
 
 class PrivacyViewModel(
-    private val playerRepository: PlayerRepository = MockPlayerRepository.instance
+    private val playerRepository: PlayerRepository = FirebasePlayerRepository.instance
 ) : ViewModel() {
     fun getPlayer(playerId: String): Player? = playerRepository.getPlayerById(playerId)
     
@@ -98,7 +98,9 @@ class PrivacyViewModel(
     
     fun savePrivacySettings(playerId: String, settings: PrivacySettings) {
         val player = getPlayer(playerId) ?: return
-        playerRepository.updatePlayer(player.copy(privacySettings = settings))
+        viewModelScope.launch {
+            playerRepository.updatePlayer(player.copy(privacySettings = settings))
+        }
     }
 }
 
@@ -113,10 +115,6 @@ fun PrivacyScreen(
     val age = player?.let { viewModel.calculateAge(it.dateOfBirth) } ?: -1
     val isMinor = age < 18
 
-    // For minors, everything sensitive is "Solo autorizados", and others may be what they are. 
-    // Wait, the requirement says minor cannot change sensitive data, and even for non-sensitive data, guardian manages it?
-    // "Para menores, las preferencias deben ser administradas por el responsable vinculado y nunca pueden superar las restricciones obligatorias del sistema... Mostrar un candado."
-    
     // We will initialize state from player's actual settings:
     val initialSettings = player?.privacySettings ?: PrivacySettings()
     
