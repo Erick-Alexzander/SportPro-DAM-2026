@@ -42,6 +42,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -51,6 +53,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -72,6 +75,7 @@ import devs.grupo5.sportpro.presentation.trainer.theme.SportProTextPrimary
 import devs.grupo5.sportpro.presentation.trainer.theme.SportProTextSecondary
 import devs.grupo5.sportpro.presentation.trainer.theme.SportProWarning
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 data class QuickEventOption(
     val type: String,
@@ -103,6 +107,13 @@ fun LiveMatchScreen(
 
     var activeModalEvent by remember { mutableStateOf<QuickEventOption?>(null) }
     var showFullTimelineSheet by remember { mutableStateOf(false) }
+
+    val sportProPlayers = remember(match?.teamId) { 
+        match?.teamId?.let { viewModel.getPlayersForTeam(it) } ?: emptyList() 
+    }
+    
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
 
     // Auto toast clearing
     LaunchedEffect(toastMessage) {
@@ -495,8 +506,14 @@ fun LiveMatchScreen(
             RegisterEventBottomSheet(
                 eventOption = opt,
                 match = match,
+                sportProPlayers = sportProPlayers,
                 onDismiss = { activeModalEvent = null },
                 onConfirm = { minute, team, player, status, detail ->
+                    if (match.status != "En vivo") {
+                        scope.launch { snackbarHostState.showSnackbar("No se pueden registrar eventos si el partido no está en vivo") }
+                        return@RegisterEventBottomSheet
+                    }
+                    
                     viewModel.addMatchEvent(
                         matchId = match.id,
                         minute = minute,
@@ -560,6 +577,11 @@ fun LiveMatchScreen(
                 }
             }
         }
+        
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp)
+        )
     }
 }
 
@@ -663,6 +685,7 @@ fun EventStatusChip(status: String) {
 fun RegisterEventBottomSheet(
     eventOption: QuickEventOption,
     match: Match,
+    sportProPlayers: List<devs.grupo5.sportpro.data.model.Player>,
     onDismiss: () -> Unit,
     onConfirm: (minute: Int, team: String, player: String, status: String, detail: String) -> Unit
 ) {
@@ -673,18 +696,17 @@ fun RegisterEventBottomSheet(
     
     var selectedTeam by remember { mutableStateOf(localTeamName) }
 
-    val defaultPlayers = listOf(
-        "Carlos Mendoza",
-        "Diego Herrera",
-        "Sebastián Torres",
-        "Felipe Muñoz",
-        "Rival #10",
-        "Rival #7"
-    )
-    var selectedPlayer by remember { mutableStateOf(defaultPlayers.first()) }
+
+    
+    val isSportProSelected = if (match.isHome) selectedTeam == localTeamName else selectedTeam == awayTeamName
+    val availablePlayers = if (isSportProSelected) sportProPlayers.map { it.fullName } else emptyList()
+
+    var selectedPlayer by remember { mutableStateOf("") }
     var customPlayerText by remember { mutableStateOf("") }
-    var eventStatusChoice by remember { mutableStateOf("Local") } // "Local", "Visitante", "Corregido", "Anulado"
+
     var additionalNotes by remember { mutableStateOf("") }
+    
+    var showError by remember { mutableStateOf<String?>(null) }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -803,7 +825,6 @@ fun RegisterEventBottomSheet(
                             .border(1.dp, if (isSelected) SportProGreen else SportProCardBorder, RoundedCornerShape(10.dp))
                             .clickable {
                                 selectedTeam = t
-                                eventStatusChoice = if (t == localTeamName) "Local" else "Visitante"
                             }
                             .padding(vertical = 10.dp),
                         contentAlignment = Alignment.Center
@@ -829,39 +850,47 @@ fun RegisterEventBottomSheet(
             )
             Spacer(modifier = Modifier.height(6.dp))
 
-            FlowRow(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                defaultPlayers.forEach { p ->
-                    val isSelected = selectedPlayer == p && customPlayerText.isEmpty()
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(if (isSelected) SportProGreen.copy(alpha = 0.2f) else SportProDarkBackground)
-                            .border(1.dp, if (isSelected) SportProGreen else SportProCardBorder, RoundedCornerShape(8.dp))
-                            .clickable {
-                                selectedPlayer = p
-                                customPlayerText = ""
-                            }
-                            .padding(horizontal = 10.dp, vertical = 6.dp)
-                    ) {
-                        Text(
-                            text = p,
-                            fontSize = 12.sp,
-                            color = if (isSelected) SportProGreen else SportProTextPrimary,
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                        )
+            if (availablePlayers.isNotEmpty()) {
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    availablePlayers.forEach { p ->
+                        val isSelected = selectedPlayer == p && customPlayerText.isEmpty()
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(if (isSelected) SportProGreen.copy(alpha = 0.2f) else SportProDarkBackground)
+                                .border(1.dp, if (isSelected) SportProGreen else SportProCardBorder, RoundedCornerShape(8.dp))
+                                .clickable {
+                                    selectedPlayer = p
+                                    customPlayerText = ""
+                                }
+                                .padding(horizontal = 10.dp, vertical = 6.dp)
+                        ) {
+                            Text(
+                                text = p,
+                                fontSize = 12.sp,
+                                color = if (isSelected) SportProGreen else SportProTextPrimary,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                            )
+                        }
                     }
                 }
+            } else {
+                Text(
+                    text = "Selecciona o ingresa un jugador del equipo rival.",
+                    fontSize = 12.sp,
+                    color = SportProTextSecondary
+                )
             }
 
             Spacer(modifier = Modifier.height(8.dp))
 
             OutlinedTextField(
                 value = customPlayerText,
-                onValueChange = { customPlayerText = it },
+                onValueChange = { customPlayerText = it; selectedPlayer = "" },
                 label = { Text("Otro jugador (opcional)", color = SportProTextMuted, fontSize = 12.sp) },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
@@ -875,42 +904,9 @@ fun RegisterEventBottomSheet(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // ESTADO DE INCIDENCIA Choice
-            Text(
-                text = "ESTADO INCIDENCIA",
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold,
-                color = SportProTextMuted
-            )
-            Spacer(modifier = Modifier.height(6.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                listOf("Local", "Visitante", "Corregido", "Anulado").forEach { st ->
-                    val isSel = eventStatusChoice.equals(st, ignoreCase = true)
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(if (isSel) SportProGreen else SportProDarkBackground)
-                            .border(1.dp, if (isSel) SportProGreen else SportProCardBorder, RoundedCornerShape(8.dp))
-                            .clickable { eventStatusChoice = st }
-                            .padding(vertical = 8.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = st,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = if (isSel) Color.Black else SportProTextPrimary
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
+            // The requirement says: "Corregido y Anulado" should not be mixed as teams.
+            // Also, there's no reason to select "Local" or "Visitante" here since we already picked the Team.
+            // So we will remove the "ESTADO INCIDENCIA" choice that had "Local, Visitante, Corregido, Anulado"
 
             // Additional Notes / Details
             OutlinedTextField(
@@ -929,12 +925,41 @@ fun RegisterEventBottomSheet(
 
             Spacer(modifier = Modifier.height(20.dp))
 
+            if (showError != null) {
+                Text(
+                    text = showError ?: "",
+                    color = SportProError,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+            }
+
             // Primary Confirm Button
             Button(
                 onClick = {
                     val finalPlayer = if (customPlayerText.isNotBlank()) customPlayerText.trim() else selectedPlayer
-                    val shortTeamName = if (selectedTeam.contains("Local")) "Local" else "Visitante"
-                    onConfirm(minute, shortTeamName, finalPlayer, eventStatusChoice, additionalNotes.trim())
+                    val shortTeamName = if (selectedTeam == localTeamName) "Local" else "Visitante"
+                    
+                    if (minute <= 0) {
+                        showError = "El minuto debe ser mayor a 0."
+                        return@Button
+                    }
+                    if (shortTeamName.isEmpty()) {
+                        showError = "Debe seleccionar un equipo."
+                        return@Button
+                    }
+                    if (finalPlayer.isBlank() && eventOption.type != "Córner" && eventOption.type != "Falta" && eventOption.type != "Fuera de juego") {
+                        showError = "Debe seleccionar o ingresar un jugador para este evento."
+                        return@Button
+                    }
+
+                    showError = null
+                    
+                    // We removed the eventStatusChoice selection since it shouldn't be mixed with teams.
+                    // Instead, we just pass the shortTeamName as the status to maintain compatibility with the data model for now,
+                    // or "Pendiente"/"Confirmado". We'll pass shortTeamName.
+                    onConfirm(minute, shortTeamName, finalPlayer, shortTeamName, additionalNotes.trim())
                 },
                 modifier = Modifier
                     .fillMaxWidth()

@@ -11,6 +11,8 @@ import devs.grupo5.sportpro.data.repository.MatchRepository
 import devs.grupo5.sportpro.data.repository.MockCommunityRepository
 import devs.grupo5.sportpro.data.repository.MockMatchRepository
 import devs.grupo5.sportpro.data.repository.MockTeamRepository
+import devs.grupo5.sportpro.data.repository.MockPlayerRepository
+import devs.grupo5.sportpro.data.repository.PlayerRepository
 import devs.grupo5.sportpro.data.repository.TeamRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -19,7 +21,8 @@ import kotlinx.coroutines.flow.asStateFlow
 class MatchViewModel(
     private val matchRepository: MatchRepository = MockMatchRepository.instance,
     private val teamRepository: TeamRepository = MockTeamRepository.instance,
-    private val communityRepository: CommunityRepository = MockCommunityRepository.instance
+    private val communityRepository: CommunityRepository = MockCommunityRepository.instance,
+    private val playerRepository: PlayerRepository = MockPlayerRepository.instance
 ) : ViewModel() {
 
     val matches: StateFlow<List<Match>> = matchRepository.matches
@@ -42,6 +45,11 @@ class MatchViewModel(
 
     fun getMatchById(matchId: String): Match? {
         return matchRepository.getMatchById(matchId)
+    }
+
+    fun getPlayersForTeam(teamId: String): List<devs.grupo5.sportpro.data.model.Player> {
+        val team = teamRepository.getTeamById(teamId) ?: return emptyList()
+        return playerRepository.getPlayersByIds(team.playerIds)
     }
 
     fun addMatch(
