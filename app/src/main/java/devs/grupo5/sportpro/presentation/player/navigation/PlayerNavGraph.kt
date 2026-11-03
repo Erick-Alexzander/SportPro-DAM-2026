@@ -45,10 +45,12 @@ object PlayerRoutes {
     const val HELP = "player_help"
     const val COMMUNITY = "player_community"
     const val POST_DETAIL = "player_post_detail/{postId}"
+    const val PUBLIC_PROFILE = "player_public_profile/{uid}"
 
     fun sessionDetail(sessionId: String) = "player_session_detail/$sessionId"
     fun postDetail(postId: String) = "player_post_detail/$postId"
     fun matchDetail(matchId: String) = "player_match_detail/$matchId"
+    fun publicProfile(uid: String) = "player_public_profile/$uid"
 }
 
 @Composable
@@ -217,13 +219,23 @@ fun PlayerMainContainerScreen(
             arguments = listOf(navArgument("postId") { type = NavType.StringType })
         ) { backStackEntry ->
             val postId = backStackEntry.arguments?.getString("postId") ?: ""
-            val currentUser by authViewModel.currentUser.collectAsState()
 
             PostDetailScreen(
                 postId = postId,
-                currentUserInitials = initialsOf(currentUser),
                 onBackClick = { navController.popBackStack() },
-                onTabSelected = { tab -> navigateToTab(navController, tab) }
+                onTabSelected = { tab -> navigateToTab(navController, tab) },
+                onUserProfileClick = { uid -> navController.navigate(PlayerRoutes.publicProfile(uid)) }
+            )
+        }
+
+        composable(
+            route = PlayerRoutes.PUBLIC_PROFILE,
+            arguments = listOf(navArgument("uid") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val uid = backStackEntry.arguments?.getString("uid") ?: ""
+            devs.grupo5.sportpro.presentation.player.community.PublicProfileScreen(
+                uid = uid,
+                onBackClick = { navController.popBackStack() }
             )
         }
     }
