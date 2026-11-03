@@ -24,6 +24,8 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.SportsSoccer
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -32,6 +34,7 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -62,13 +65,21 @@ import devs.grupo5.sportpro.presentation.player.theme.SportProPlayerTheme
 
 @Composable
 fun PostDetailScreen(
+    authViewModel: devs.grupo5.sportpro.presentation.auth.AuthViewModel = androidx.lifecycle.viewmodel.compose.viewModel(),
     postId: String = "",
     currentUserInitials: String = "CM",
     onBackClick: () -> Unit = {},
     onTabSelected: (PlayerTab) -> Unit = {}
 ) {
+    val currentUser by authViewModel.currentUser.collectAsState()
+    val uid = currentUser?.uid
+
     val post = findPostById(postId)
     var commentText by remember { mutableStateOf("") }
+    
+    var menuExpanded by remember { mutableStateOf(false) }
+    var showReportDialog by remember { mutableStateOf(false) }
+    var reportTarget by remember { mutableStateOf<Pair<devs.grupo5.sportpro.data.model.ReportTargetType, String>?>(null) }
 
     SportProPlayerTheme {
         Scaffold(
@@ -106,12 +117,28 @@ fun PostDetailScreen(
                         color = PlayerTextPrimary,
                         modifier = Modifier.weight(1f)
                     )
-                    IconButton(onClick = { }) {
-                        Icon(
-                            imageVector = Icons.Default.MoreVert,
-                            contentDescription = "Opciones de publicación",
-                            tint = PlayerTextPrimary
-                        )
+                    Box {
+                        IconButton(onClick = { menuExpanded = true }) {
+                            Icon(
+                                imageVector = Icons.Default.MoreVert,
+                                contentDescription = "Opciones de publicación",
+                                tint = PlayerTextPrimary
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = menuExpanded,
+                            onDismissRequest = { menuExpanded = false },
+                            containerColor = PlayerSurfaceVariant
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("Reportar publicación", color = Color.White) },
+                                onClick = {
+                                    menuExpanded = false
+                                    reportTarget = Pair(devs.grupo5.sportpro.data.model.ReportTargetType.PUBLICATION, post.id)
+                                    showReportDialog = true
+                                }
+                            )
+                        }
                     }
                 }
 
@@ -126,9 +153,12 @@ fun PostDetailScreen(
                         MainPostCard(post = post)
                     }
 
+                    val visibleComments = postComments.filter { c ->
+                        devs.grupo5.sportpro.data.repository.MockReportRepository.instance.getContentModerationStatus(c.id) == devs.grupo5.sportpro.data.model.ContentModerationStatus.VISIBLE
+                    }
                     item {
                         Text(
-                            text = "${postComments.size} Comentarios",
+                            text = "${visibleComments.size} Comentarios",
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Bold,
                             color = PlayerTextPrimary,
@@ -136,8 +166,11 @@ fun PostDetailScreen(
                         )
                     }
 
-                    items(postComments, key = { it.id }) { comment ->
-                        CommentCard(comment = comment)
+                    items(visibleComments, key = { it.id }) { comment ->
+                        CommentCard(comment = comment, onReport = { 
+                            reportTarget = Pair(devs.grupo5.sportpro.data.model.ReportTargetType.COMMENT, comment.id)
+                            showReportDialog = true
+                        })
                     }
 
                     item { Spacer(modifier = Modifier.height(8.dp)) }
@@ -153,6 +186,16 @@ fun PostDetailScreen(
                 )
             }
         }
+    }
+    
+    if (showReportDialog && reportTarget != null) {
+        devs.grupo5.sportpro.presentation.components.ReportDialog(
+            targetType = reportTarget!!.first,
+            targetId = reportTarget!!.second,
+            parentPostId = post.id,
+            reporterUid = uid,
+            onDismiss = { showReportDialog = false; reportTarget = null }
+        )
     }
 }
 
@@ -235,7 +278,9 @@ private fun MainPostCard(post: CommunityPost) {
 }
 
 @Composable
-private fun CommentCard(comment: PostComment) {
+private fun CommentCard(comment: PostComment, onReport: () -> Unit = {}) {
+    var menuExpanded by remember { mutableStateOf(false) }
+    
     Row(modifier = Modifier.fillMaxWidth()) {
         Avatar(
             initials = comment.initials,
@@ -266,6 +311,30 @@ private fun CommentCard(comment: PostComment) {
                     text = comment.meta,
                     fontSize = 11.sp,
                     color = PlayerTextMuted
+                )
+            }
+        }
+        
+        Box {
+            IconButton(onClick = { menuExpanded = true }, modifier = Modifier.size(24.dp)) {
+                Icon(
+                    imageVector = Icons.Default.MoreVert,
+                    contentDescription = "Más opciones",
+                    tint = PlayerTextMuted,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+            DropdownMenu(
+                expanded = menuExpanded,
+                onDismissRequest = { menuExpanded = false },
+                containerColor = PlayerSurfaceVariant
+            ) {
+                DropdownMenuItem(
+                    text = { Text("Reportar comentario", color = Color.White) },
+                    onClick = {
+                        menuExpanded = false
+                        onReport()
+                    }
                 )
             }
         }
