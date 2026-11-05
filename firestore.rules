@@ -4,20 +4,18 @@ service cloud.firestore {
 
     // --- FUNCIONES AUXILIARES ---
 
-    function isAuthenticated() {
+    function signedIn() {
       return request.auth != null;
     }
 
-    function getRole() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
-    }
-
     function isTrainer() {
-      return isAuthenticated() && getRole() == 'TRAINER';
+      return signedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "TRAINER";
     }
 
     function isOwner(data) {
-      return isAuthenticated() && data.ownerUid == request.auth.uid;
+      return signedIn() && data.ownerUid == request.auth.uid;
     }
 
     function isImmutable(field) {
@@ -27,22 +25,34 @@ service cloud.firestore {
     // --- REGLAS PARA USUARIOS (PERFILES) ---
 
     match /users/{userId} {
-      allow read: if isAuthenticated() && request.auth.uid == userId;
+      allow get: if signedIn()
+        && request.auth.uid == userId;
 
-      // Creación:
-      // 1. Solo el propio UID.
-      // 2. Rol restringido a TRAINER, PLAYER, PARENT (No ADMIN).
-      // 3. Allowlist estricta de campos iniciales.
-      allow create: if isAuthenticated() && request.auth.uid == userId
-                    && request.resource.data.uid == userId
-                    && (request.resource.data.role in ['TRAINER', 'PLAYER', 'PARENT'])
-                    && request.resource.data.keys().hasOnly(['uid', 'firstName', 'lastName', 'email', 'role', 'birthDate']);
+      allow list: if false;
 
-      // Actualización: Bloquear escalación de privilegios
-      allow update: if isAuthenticated() && request.auth.uid == userId
-                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-                        'firstName', 'lastName', 'birthDate'
-                    ]);
+      allow create: if signedIn()
+        && request.auth.uid == userId
+        && request.resource.data.keys().hasAll([
+          'uid', 'email', 'firstName', 'lastName', 'role'
+        ])
+        && request.resource.data.keys().hasOnly([
+          'uid', 'email', 'firstName', 'lastName',
+          'role', 'birthDate'
+        ])
+        && request.resource.data.uid == userId
+        && request.resource.data.email is string
+        && request.resource.data.firstName is string
+        && request.resource.data.lastName is string
+        && request.resource.data.role in [
+          'TRAINER', 'PLAYER', 'PARENT'
+        ];
+
+      allow update: if signedIn()
+        && request.auth.uid == userId
+        && request.resource.data.diff(resource.data)
+          .affectedKeys().hasOnly([
+            'firstName', 'lastName', 'birthDate'
+          ]);
 
       allow delete: if false;
     }
@@ -50,42 +60,57 @@ service cloud.firestore {
     // --- REGLAS PARA EQUIPOS ---
 
     match /teams/{teamId} {
-      allow read: if isOwner(resource.data);
+      allow get, list: if signedIn()
+        && resource.data.ownerUid == request.auth.uid;
 
-      // Creación:
-      // 1. Debe ser Entrenador.
-      // 2. El equipo DEBE nacer vacío (playerIds=[] y playerCount=0).
-      // 3. Allowlist estricta de campos.
       allow create: if isTrainer()
-                    && request.resource.data.ownerUid == request.auth.uid
-                    && request.resource.data.id == teamId
-                    && request.resource.data.playerIds == []
-                    && request.resource.data.playerCount == 0
-                    && request.resource.data.keys().hasOnly(['id', 'ownerUid', 'name', 'category', 'description', 'coachName', 'playerIds', 'playerCount']);
+        && request.resource.data.keys().hasAll([
+          'id', 'name', 'category', 'description',
+          'coachName', 'ownerUid', 'playerIds',
+          'playerCount'
+        ])
+        && request.resource.data.keys().hasOnly([
+          'id', 'name', 'category', 'description',
+          'coachName', 'ownerUid', 'playerIds',
+          'playerCount'
+        ])
+        && request.resource.data.id == teamId
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.category in [
+          'Primera', 'Sub-15', 'Sub-10'
+        ]
+        && request.resource.data.description is string
+        && request.resource.data.coachName is string
+        && request.resource.data.playerIds == []
+        && request.resource.data.playerCount == 0;
 
-      // Actualización:
-      // 1. Solo el propietario.
-      // 2. Protegemos contra duplicados en playerIds.
-      // 3. Integridad Atómica: Si se añade un ID, debe existir el Player correspondiente (propios y vinculados).
-      allow update: if isOwner(resource.data)
-                    && isImmutable('ownerUid')
-                    && isImmutable('id')
-                    && request.resource.data.playerCount == request.resource.data.playerIds.size()
-                    && request.resource.data.playerIds.toSet().size() == request.resource.data.playerIds.size()
-                    && request.resource.data.diff(resource.data).affectedKeys()
-                        .hasOnly(['name', 'category', 'description', 'coachName', 'playerIds', 'playerCount'])
-                    && (
-                      isImmutable('playerIds') ||
-                      (
-                        // Append legítimo vía addPlayerWithTeam (Transacción)
-                        request.resource.data.playerIds.size() == resource.data.playerIds.size() + 1 &&
-                        request.resource.data.playerIds.hasAll(resource.data.playerIds) &&
-                        // El jugador NO debe existir antes de la operación (garantiza transacción de creación)
-                        !exists(/databases/$(database)/documents/players/$(request.resource.data.playerIds[resource.data.playerIds.size()])) &&
-                        getAfter(/databases/$(database)/documents/players/$(request.resource.data.playerIds[resource.data.playerIds.size()])).data.teamId == teamId &&
-                        getAfter(/databases/$(database)/documents/players/$(request.resource.data.playerIds[resource.data.playerIds.size()])).data.ownerUid == request.auth.uid
-                      )
-                    );
+      allow update: if isTrainer()
+        && resource.data.ownerUid == request.auth.uid
+        && isImmutable('ownerUid')
+        && isImmutable('id')
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'name', 'category', 'description', 'coachName', 'playerIds', 'playerCount'
+        ])
+        && request.resource.data.playerCount == request.resource.data.playerIds.size()
+        && request.resource.data.playerIds.toSet().size() == request.resource.data.playerIds.size()
+        && (
+            isImmutable('playerIds') ||
+            (
+                ( // Agregar un jugador (Append)
+                  request.resource.data.playerIds.size() == resource.data.playerIds.size() + 1 &&
+                  request.resource.data.playerIds.hasAll(resource.data.playerIds) &&
+                  getAfter(/databases/$(database)/documents/players/$(request.resource.data.playerIds.removeAll(resource.data.playerIds)[0])).data.get('teamId', null) == teamId &&
+                  getAfter(/databases/$(database)/documents/players/$(request.resource.data.playerIds.removeAll(resource.data.playerIds)[0])).data.ownerUid == request.auth.uid
+                ) ||
+                ( // Remover un jugador (Remove)
+                  request.resource.data.playerIds.size() == resource.data.playerIds.size() - 1 &&
+                  resource.data.playerIds.hasAll(request.resource.data.playerIds) &&
+                  getAfter(/databases/$(database)/documents/players/$(resource.data.playerIds.removeAll(request.resource.data.playerIds)[0])).data.get('teamId', null) == null
+                )
+            )
+        );
 
       allow delete: if false;
     }
@@ -93,38 +118,51 @@ service cloud.firestore {
     // --- REGLAS PARA JUGADORES ---
 
     match /players/{playerId} {
-      allow read: if isOwner(resource.data);
+      allow get, list: if signedIn()
+        && resource.data.ownerUid == request.auth.uid;
 
-      // Creación:
-      // 1. Validamos todos los campos del modelo Player.kt.
-      // 2. Integridad bidireccional atómica con el equipo.
       allow create: if isTrainer()
-                    && request.resource.data.ownerUid == request.auth.uid
-                    && request.resource.data.id == playerId
-                    && request.resource.data.keys().hasAll(['id', 'ownerUid', 'fullName', 'category', 'status'])
-                    && request.resource.data.keys().hasOnly([
-                        'id', 'ownerUid', 'teamId', 'fullName', 'category', 'position', 'jerseyNumber',
-                        'age', 'status', 'dateOfBirth', 'contactEmail', 'dominantFoot', 'size', 'weight',
-                        'parentName', 'parentRelation', 'parentPhone', 'emergencyPhone', 'privacySettings'
-                    ])
-                    && (
-                      request.resource.data.teamId == null ||
-                      (
-                        getAfter(/databases/$(database)/documents/teams/$(request.resource.data.teamId)).data.ownerUid == request.auth.uid &&
-                        playerId in getAfter(/databases/$(database)/documents/teams/$(request.resource.data.teamId)).data.playerIds
-                      )
-                    );
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.id == playerId
+        && request.resource.data.keys().hasAll(['id', 'ownerUid', 'fullName', 'category', 'status'])
+        && request.resource.data.keys().hasOnly([
+            'id', 'ownerUid', 'teamId', 'fullName', 'category', 'position', 'jerseyNumber',
+            'age', 'status', 'dateOfBirth', 'contactEmail', 'dominantFoot', 'size', 'weight',
+            'parentName', 'parentRelation', 'parentPhone', 'emergencyPhone', 'privacySettings'
+        ])
+        && (
+            !request.resource.data.keys().hasAny(['teamId']) ||
+            request.resource.data.get('teamId', null) == null ||
+            (
+                getAfter(/databases/$(database)/documents/teams/$(request.resource.data.teamId)).data.ownerUid == request.auth.uid &&
+                playerId in getAfter(/databases/$(database)/documents/teams/$(request.resource.data.teamId)).data.playerIds
+            )
+        );
 
-      allow update: if isOwner(resource.data)
-                    && isImmutable('ownerUid')
-                    && isImmutable('id')
-                    && isImmutable('teamId')
-                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-                        'fullName', 'category', 'position', 'jerseyNumber', 'age', 'status',
-                        'dateOfBirth', 'contactEmail', 'dominantFoot', 'size', 'weight',
-                        'parentName', 'parentRelation', 'parentPhone', 'emergencyPhone',
-                        'privacySettings'
-                    ]);
+      allow update: if isTrainer()
+        && resource.data.ownerUid == request.auth.uid
+        && isImmutable('ownerUid')
+        && isImmutable('id')
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'teamId', 'fullName', 'category', 'position', 'jerseyNumber', 'age', 'status',
+            'dateOfBirth', 'contactEmail', 'dominantFoot', 'size', 'weight',
+            'parentName', 'parentRelation', 'parentPhone', 'emergencyPhone',
+            'privacySettings'
+        ])
+        && (
+            isImmutable('teamId') ||
+            (
+                request.resource.data.get('teamId', null) == null &&
+                resource.data.get('teamId', null) != null &&
+                !(playerId in getAfter(/databases/$(database)/documents/teams/$(resource.data.teamId)).data.playerIds)
+            ) ||
+            (
+                request.resource.data.get('teamId', null) != null &&
+                resource.data.get('teamId', null) == null &&
+                getAfter(/databases/$(database)/documents/teams/$(request.resource.data.teamId)).data.ownerUid == request.auth.uid &&
+                playerId in getAfter(/databases/$(database)/documents/teams/$(request.resource.data.teamId)).data.playerIds
+            )
+        );
 
       allow delete: if false;
     }

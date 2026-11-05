@@ -198,10 +198,9 @@ fun TrainerMainContainerScreen(
                     PlayerResponsibleScreen(
                         viewModel = playerViewModel,
                         onBackClick = { navController.popBackStack() },
-                        onPlayerRegistered = {
-                            val targetTeamId = playerViewModel.currentTeamIdForRegistration
-                            if (targetTeamId != null && targetTeamId.isNotBlank()) {
-                                navController.popBackStack("team_detail/$targetTeamId", inclusive = false)
+                        onPlayerRegistered = { teamId ->
+                            if (teamId != null && teamId.isNotBlank()) {
+                                navController.popBackStack("team_detail/$teamId", inclusive = false)
                             } else {
                                 navController.popBackStack(TrainerRoutes.PLAYERS, inclusive = false)
                             }

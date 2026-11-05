@@ -29,6 +29,9 @@ class PlayerViewModel(
 
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
+    
+    private val _registrationError = MutableStateFlow<String?>(null)
+    val registrationError: StateFlow<String?> = _registrationError.asStateFlow()
 
     // Draft registration state
     var registrationDraft = Player()
@@ -45,6 +48,7 @@ class PlayerViewModel(
     fun startRegistrationForTeam(teamId: String?) {
         currentTeamIdForRegistration = teamId
         registrationDraft = Player()
+        _registrationError.value = null
     }
 
     fun calculateAge(birthDateStr: String): Int {
@@ -96,11 +100,12 @@ class PlayerViewModel(
         )
     }
 
-    fun registerPlayer(onResult: (Boolean) -> Unit = {}) {
+    fun registerPlayer(onResult: (Boolean, String?) -> Unit = { _, _ -> }) {
         val teamId = currentTeamIdForRegistration
         
         viewModelScope.launch {
             _isLoading.value = true
+            _registrationError.value = null
             
             val result = if (teamId != null) {
                 playerRepository.addPlayerWithTeam(registrationDraft, teamId)
@@ -109,12 +114,14 @@ class PlayerViewModel(
             }
             
             if (result.isSuccess) {
+                val successfulTeamId = currentTeamIdForRegistration
                 // Reset draft
                 registrationDraft = Player()
                 currentTeamIdForRegistration = null
-                onResult(true)
+                onResult(true, successfulTeamId)
             } else {
-                onResult(false)
+                _registrationError.value = result.exceptionOrNull()?.message ?: "Ocurrió un error al registrar"
+                onResult(false, null)
             }
             _isLoading.value = false
         }

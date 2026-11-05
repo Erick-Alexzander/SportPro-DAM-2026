@@ -120,6 +120,8 @@ class FirebaseTeamRepository private constructor() : TeamRepository {
         val uid = auth.currentUser?.uid ?: return Result.failure(Exception("Usuario no autenticado"))
         return try {
             val teamRef = firestore.collection("teams").document(teamId)
+            val playerRef = firestore.collection("players").document(playerId)
+            
             firestore.runTransaction { transaction ->
                 val snapshot = transaction.get(teamRef)
                 if (!snapshot.exists()) {
@@ -129,11 +131,25 @@ class FirebaseTeamRepository private constructor() : TeamRepository {
                 if (ownerUid != uid) {
                     throw Exception("No tienes permisos para modificar este equipo")
                 }
+                
+                val playerSnapshot = transaction.get(playerRef)
+                if (!playerSnapshot.exists()) {
+                    throw Exception("El jugador no existe")
+                }
+                if (playerSnapshot.getString("ownerUid") != uid) {
+                    throw Exception("No tienes permisos para modificar este jugador")
+                }
+                
+                val currentTeamId = playerSnapshot.getString("teamId")
+                if (currentTeamId != null && currentTeamId != teamId) {
+                    throw Exception("El jugador ya pertenece a otro equipo. Desvincúlalo primero.")
+                }
 
                 val currentPlayers = snapshot.get("playerIds") as? List<*> ?: emptyList<Any>()
                 if (!currentPlayers.contains(playerId)) {
                     transaction.update(teamRef, "playerIds", FieldValue.arrayUnion(playerId))
                     transaction.update(teamRef, "playerCount", currentPlayers.size + 1)
+                    transaction.update(playerRef, "teamId", teamId)
                 }
             }.await()
             Result.success(Unit)
@@ -146,6 +162,8 @@ class FirebaseTeamRepository private constructor() : TeamRepository {
         val uid = auth.currentUser?.uid ?: return Result.failure(Exception("Usuario no autenticado"))
         return try {
             val teamRef = firestore.collection("teams").document(teamId)
+            val playerRef = firestore.collection("players").document(playerId)
+            
             firestore.runTransaction { transaction ->
                 val snapshot = transaction.get(teamRef)
                 if (!snapshot.exists()) {
@@ -156,12 +174,17 @@ class FirebaseTeamRepository private constructor() : TeamRepository {
                     throw Exception("No tienes permisos para modificar este equipo")
                 }
 
+                val playerSnapshot = transaction.get(playerRef)
+                
                 val currentPlayers = snapshot.get("playerIds") as? List<*> ?: emptyList<Any>()
                 if (currentPlayers.contains(playerId)) {
                     transaction.update(teamRef, "playerIds", FieldValue.arrayRemove(playerId))
-                    // Asegurar de no dejar count en negativo
                     val newCount = maxOf(0, currentPlayers.size - 1)
                     transaction.update(teamRef, "playerCount", newCount)
+                    
+                    if (playerSnapshot.exists() && playerSnapshot.getString("ownerUid") == uid) {
+                        transaction.update(playerRef, "teamId", null)
+                    }
                 }
             }.await()
             Result.success(Unit)

@@ -31,6 +31,8 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -57,6 +59,7 @@ fun TrainerDashboardScreen(
     onNavigateToTeams: () -> Unit = {},
     onNavigateToCommunity: () -> Unit = {}
 ) {
+    val totalPlayersCount by viewModel.totalPlayersCount.collectAsState()
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -189,7 +192,7 @@ fun TrainerDashboardScreen(
                 ) {
                     StatCard(
                         title = "Jugadores",
-                        value = "${viewModel.totalPlayersCount}",
+                        value = "$totalPlayersCount",
                         modifier = Modifier.weight(1f)
                     )
                     StatCard(

@@ -27,6 +27,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -53,8 +54,11 @@ import devs.grupo5.sportpro.presentation.trainer.theme.SportProWarning
 fun PlayerResponsibleScreen(
     viewModel: PlayerViewModel = viewModel(),
     onBackClick: () -> Unit = {},
-    onPlayerRegistered: () -> Unit = {}
+    onPlayerRegistered: (String?) -> Unit = {}
 ) {
+    val isLoading by viewModel.isLoading.collectAsState()
+    val registrationError by viewModel.registrationError.collectAsState()
+
     var parentName by remember { mutableStateOf(viewModel.registrationDraft.parentName) }
     var parentRelation by remember { mutableStateOf(viewModel.registrationDraft.parentRelation) }
     val age = viewModel.registrationDraft.age
@@ -195,6 +199,18 @@ fun PlayerResponsibleScreen(
 
         // Fields
         item {
+            if (registrationError != null) {
+                Text(
+                    text = registrationError ?: "",
+                    color = SportProWarning,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 12.dp)
+                )
+            }
+            
             OutlinedTextField(
                 value = parentName,
                 onValueChange = { parentName = it },
@@ -293,7 +309,7 @@ fun PlayerResponsibleScreen(
             Button(
                 onClick = {
                     showErrors = true
-                    if (isValid) {
+                    if (isValid && !isLoading) {
                         val finalParentPhone = if (parentPhone.isNotBlank()) "+51 $parentPhone" else ""
                         val finalEmergencyPhone = if (emergencyPhone.isNotBlank()) "+51 $emergencyPhone" else ""
                         viewModel.updateResponsibleData(
@@ -302,11 +318,14 @@ fun PlayerResponsibleScreen(
                             parentRelation = parentRelation,
                             emergencyPhone = finalEmergencyPhone
                         )
-                        viewModel.registerPlayer()
-                        onPlayerRegistered()
+                        viewModel.registerPlayer { success, teamId ->
+                            if (success) {
+                                onPlayerRegistered(teamId)
+                            }
+                        }
                     }
                 },
-                enabled = isValid,
+                enabled = isValid && !isLoading,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(50.dp),
@@ -318,11 +337,19 @@ fun PlayerResponsibleScreen(
                 ),
                 shape = RoundedCornerShape(12.dp)
             ) {
-                Text(
-                    text = "Registrar jugador",
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold
-                )
+                if (isLoading) {
+                    androidx.compose.material3.CircularProgressIndicator(
+                        modifier = Modifier.size(24.dp),
+                        color = Color.Black,
+                        strokeWidth = 2.dp
+                    )
+                } else {
+                    Text(
+                        text = "Registrar jugador",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(20.dp))
