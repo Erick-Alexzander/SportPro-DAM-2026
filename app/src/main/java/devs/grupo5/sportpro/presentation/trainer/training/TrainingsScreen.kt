@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -58,6 +59,8 @@ fun TrainingsScreen(
 ) {
     val trainings by viewModel.trainings.collectAsState()
     val selectedCategory by viewModel.selectedCategory.collectAsState()
+    val isLoading by viewModel.isLoading.collectAsState()
+    val syncError by viewModel.error.collectAsState()
 
     val categories = listOf("Todos", "Primera", "Sub-15", "Sub-10")
 
@@ -139,8 +142,25 @@ fun TrainingsScreen(
             }
 
             Spacer(modifier = Modifier.height(16.dp))
+            
+            if (syncError != null) {
+                Text(
+                    text = "Error de sincronización: $syncError",
+                    color = devs.grupo5.sportpro.presentation.trainer.theme.SportProError,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+            }
 
-            if (filteredTrainings.isEmpty()) {
+            if (isLoading && filteredTrainings.isEmpty()) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(color = SportProGreen)
+                }
+            } else if (filteredTrainings.isEmpty()) {
                 Box(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center

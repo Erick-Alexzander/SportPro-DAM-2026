@@ -8,9 +8,10 @@ import kotlinx.coroutines.flow.asStateFlow
 
 interface TrainingRepository {
     val trainings: StateFlow<List<Training>>
+    val syncError: StateFlow<String?>
     fun getTrainingById(id: String): Training?
-    fun addTraining(training: Training)
-    fun updateAttendance(trainingId: String, attendees: List<String>)
+    suspend fun addTraining(training: Training): Result<Unit>
+    suspend fun updateAttendance(trainingId: String, attendees: List<String>): Result<Unit>
 }
 
 class MockTrainingRepository private constructor() : TrainingRepository {
@@ -72,25 +73,30 @@ class MockTrainingRepository private constructor() : TrainingRepository {
     private val _trainings = MutableStateFlow(initialTrainings)
     override val trainings: StateFlow<List<Training>> = _trainings.asStateFlow()
 
+    private val _syncError = MutableStateFlow<String?>(null)
+    override val syncError: StateFlow<String?> = _syncError.asStateFlow()
+
     override fun getTrainingById(id: String): Training? {
         return _trainings.value.find { it.id == id }
     }
 
-    override fun addTraining(training: Training) {
+    override suspend fun addTraining(training: Training): Result<Unit> {
         val newTraining = if (training.id.isEmpty()) {
             training.copy(id = "tr_${System.currentTimeMillis()}")
         } else {
             training
         }
         _trainings.value = _trainings.value + newTraining
+        return Result.success(Unit)
     }
 
-    override fun updateAttendance(trainingId: String, attendees: List<String>) {
+    override suspend fun updateAttendance(trainingId: String, attendees: List<String>): Result<Unit> {
         _trainings.value = _trainings.value.map { training ->
             if (training.id == trainingId) {
                 training.copy(attendees = attendees)
             } else training
         }
+        return Result.success(Unit)
     }
 
     companion object {

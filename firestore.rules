@@ -166,5 +166,43 @@ service cloud.firestore {
 
       allow delete: if false;
     }
+
+    // --- REGLAS PARA ENTRENAMIENTOS ---
+
+    match /trainings/{trainingId} {
+      allow get, list: if isOwner(resource.data);
+
+      allow create: if isTrainer()
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.id == trainingId
+        && request.resource.data.keys().hasAll([
+          'id', 'ownerUid', 'teamId', 'title', 'date', 'startTime', 'durationMinutes', 'category', 'objective', 'exercises', 'attendees', 'status'
+        ])
+        && request.resource.data.keys().hasOnly([
+          'id', 'ownerUid', 'teamId', 'title', 'date', 'startTime', 'durationMinutes', 'category', 'objective', 'exercises', 'attendees', 'status'
+        ])
+        && request.resource.data.attendees == []
+        && getAfter(/databases/$(database)/documents/teams/$(request.resource.data.teamId)).data.ownerUid == request.auth.uid;
+
+      allow update: if isOwner(resource.data)
+        && isImmutable('id')
+        && isImmutable('ownerUid')
+        && isImmutable('teamId')
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'title', 'date', 'startTime', 'durationMinutes', 'category', 'objective', 'exercises', 'attendees', 'status'
+        ])
+        && (
+            isImmutable('attendees') ||
+            (
+                request.resource.data.attendees is list &&
+                request.resource.data.attendees.toSet().size() == request.resource.data.attendees.size() &&
+                request.resource.data.attendees.removeAll(resource.data.attendees).hasOnly(
+                    getAfter(/databases/$(database)/documents/teams/$(resource.data.teamId)).data.playerIds
+                )
+            )
+        );
+
+      allow delete: if false;
+    }
   }
 }

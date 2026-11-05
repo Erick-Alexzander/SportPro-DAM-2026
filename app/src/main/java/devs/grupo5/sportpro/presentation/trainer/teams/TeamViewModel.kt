@@ -10,7 +10,7 @@ import devs.grupo5.sportpro.data.repository.MatchRepository
 import devs.grupo5.sportpro.data.repository.MockMatchRepository
 import devs.grupo5.sportpro.data.repository.FirebasePlayerRepository
 import devs.grupo5.sportpro.data.repository.FirebaseTeamRepository
-import devs.grupo5.sportpro.data.repository.MockTrainingRepository
+import devs.grupo5.sportpro.data.repository.FirebaseTrainingRepository
 import devs.grupo5.sportpro.data.repository.PlayerRepository
 import devs.grupo5.sportpro.data.repository.TeamRepository
 import devs.grupo5.sportpro.data.repository.TrainingRepository
@@ -22,7 +22,7 @@ import kotlinx.coroutines.launch
 class TeamViewModel(
     private val teamRepository: TeamRepository = FirebaseTeamRepository.instance,
     private val playerRepository: PlayerRepository = FirebasePlayerRepository.instance,
-    private val trainingRepository: TrainingRepository = MockTrainingRepository.instance,
+    private val trainingRepository: TrainingRepository = FirebaseTrainingRepository.instance,
     private val matchRepository: MatchRepository = MockMatchRepository.instance
 ) : ViewModel() {
 

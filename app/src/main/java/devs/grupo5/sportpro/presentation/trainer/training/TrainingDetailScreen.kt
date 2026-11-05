@@ -28,6 +28,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
@@ -62,6 +63,8 @@ fun TrainingDetailScreen(
 ) {
     val trainings by viewModel.trainings.collectAsState()
     val allPlayers by viewModel.players.collectAsState()
+    val isLoading by viewModel.isLoading.collectAsState()
+    val errorMsg by viewModel.error.collectAsState()
 
     val training = trainings.find { it.id == trainingId } ?: viewModel.getTrainingById(trainingId)
 
@@ -77,7 +80,7 @@ fun TrainingDetailScreen(
         return
     }
 
-    val categoryPlayers = allPlayers.filter { it.category == training.category || training.category.isEmpty() }
+    val teamPlayers = allPlayers.filter { it.teamId == training.teamId }
     val attendeeIds = remember { mutableStateListOf<String>().apply { addAll(training.attendees) } }
 
     Column(
@@ -232,6 +235,15 @@ fun TrainingDetailScreen(
 
             // Attendance Section
             item {
+                if (errorMsg != null) {
+                    Text(
+                        text = errorMsg ?: "",
+                        color = devs.grupo5.sportpro.presentation.trainer.theme.SportProError,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(bottom = 12.dp)
+                    )
+                }
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -244,7 +256,7 @@ fun TrainingDetailScreen(
                         color = SportProTextPrimary
                     )
                     Text(
-                        text = "${attendeeIds.size} / ${categoryPlayers.size} Presentes",
+                        text = "${attendeeIds.size} / ${teamPlayers.size} Presentes",
                         fontSize = 13.sp,
                         color = SportProGreen,
                         fontWeight = FontWeight.Bold
@@ -252,7 +264,7 @@ fun TrainingDetailScreen(
                 }
             }
 
-            items(categoryPlayers) { player ->
+            items(teamPlayers) { player ->
                 val isPresent = attendeeIds.contains(player.id)
                 Row(
                     modifier = Modifier
@@ -302,25 +314,41 @@ fun TrainingDetailScreen(
 
         Button(
             onClick = {
-                viewModel.updateAttendance(training.id, attendeeIds.toList())
-                onBackClick()
+                if (!isLoading) {
+                    viewModel.updateAttendance(training.id, attendeeIds.toList()) { success ->
+                        if (success) {
+                            onBackClick()
+                        }
+                    }
+                }
             },
+            enabled = !isLoading,
             modifier = Modifier
                 .fillMaxWidth()
                 .height(50.dp),
             colors = ButtonDefaults.buttonColors(
                 containerColor = SportProGreen,
-                contentColor = Color.Black
+                contentColor = Color.Black,
+                disabledContainerColor = SportProGreen.copy(alpha = 0.3f),
+                disabledContentColor = Color.DarkGray
             ),
             shape = RoundedCornerShape(12.dp)
         ) {
-            Icon(imageVector = Icons.Default.Check, contentDescription = null)
-            Spacer(modifier = Modifier.width(6.dp))
-            Text(
-                text = "Registrar asistencia",
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Bold
-            )
+            if (isLoading) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(24.dp),
+                    color = Color.Black,
+                    strokeWidth = 2.dp
+                )
+            } else {
+                Icon(imageVector = Icons.Default.Check, contentDescription = null)
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = "Registrar asistencia",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
         }
     }
 }

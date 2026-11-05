@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -23,6 +24,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
@@ -61,6 +63,8 @@ fun CreateTrainingScreen(
     onSessionCreated: () -> Unit = {}
 ) {
     val teams: List<Team> by viewModel.teams.collectAsState()
+    val isLoading: Boolean by viewModel.isLoading.collectAsState()
+    val errorMsg: String? by viewModel.error.collectAsState()
 
     var selectedTeamId by remember { mutableStateOf(teams.firstOrNull()?.id ?: "") }
     var selectedCategory by remember { mutableStateOf(teams.firstOrNull()?.category ?: "Primera") }
@@ -364,12 +368,22 @@ fun CreateTrainingScreen(
         }
 
         Spacer(modifier = Modifier.height(16.dp))
+        
+        if (errorMsg != null) {
+            Text(
+                text = errorMsg ?: "",
+                color = SportProError,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(bottom = 12.dp)
+            )
+        }
 
         val isFormValid = title.isNotBlank() && selectedTeamId.isNotBlank()
 
         Button(
             onClick = {
-                if (isFormValid) {
+                if (isFormValid && !isLoading) {
                     viewModel.createTraining(
                         teamId = selectedTeamId,
                         title = title,
@@ -379,11 +393,14 @@ fun CreateTrainingScreen(
                         category = selectedCategory,
                         objective = objective,
                         exercises = exercisesList.toList()
-                    )
-                    onSessionCreated()
+                    ) { success ->
+                        if (success) {
+                            onSessionCreated()
+                        }
+                    }
                 }
             },
-            enabled = isFormValid,
+            enabled = isFormValid && !isLoading,
             modifier = Modifier
                 .fillMaxWidth()
                 .height(50.dp),
@@ -395,11 +412,19 @@ fun CreateTrainingScreen(
             ),
             shape = RoundedCornerShape(12.dp)
         ) {
-            Text(
-                text = "Crear entrenamiento",
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Bold
-            )
+            if (isLoading) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(24.dp),
+                    color = Color.Black,
+                    strokeWidth = 2.dp
+                )
+            } else {
+                Text(
+                    text = "Crear entrenamiento",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
         }
     }
 }

@@ -9,6 +9,7 @@ data class Exercise(
 
 data class Training(
     val id: String = "",
+    val ownerUid: String = "",
     val teamId: String = "",
     val title: String = "",
     val date: String = "",

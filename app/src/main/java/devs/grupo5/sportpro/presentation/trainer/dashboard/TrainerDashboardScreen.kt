@@ -210,8 +210,10 @@ fun TrainerDashboardScreen(
 
             // Next Training Card
             item {
-                val training = viewModel.nextTraining
-                if (training != null) {
+                val trainingPair by viewModel.nextTraining.collectAsState()
+                if (trainingPair != null) {
+                    val training = trainingPair!!.first
+                    val teamName = trainingPair!!.second
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -248,7 +250,7 @@ fun TrainerDashboardScreen(
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = "${training.category} • ${training.startTime} (${training.durationMinutes} min)",
+                                text = "$teamName • ${training.startTime} (${training.durationMinutes} min)",
                                 fontSize = 13.sp,
                                 color = SportProTextSecondary
                             )
