@@ -24,6 +24,7 @@ object AuthRoutes {
     const val TRAINER_MODULE = "trainer_module"
     const val PLAYER_MODULE = "player_module"
     const val PARENT_MODULE = "parent_module"
+    const val ADMIN_MODULE = "admin_module"
 }
 
 @Composable
@@ -148,6 +149,19 @@ fun AuthNavGraph(
                 }
             )
         }
+
+        // Admin Module
+        composable(AuthRoutes.ADMIN_MODULE) {
+            devs.grupo5.sportpro.presentation.admin.navigation.AdminMainContainerScreen(
+                authViewModel = authViewModel,
+                onLogoutSuccess = {
+                    authViewModel.logout()
+                    navController.navigate(AuthRoutes.WELCOME) {
+                        popUpTo(0) { inclusive = true }
+                    }
+                }
+            )
+        }
     }
 }
 
@@ -156,7 +170,7 @@ private fun navigateByRole(navController: NavHostController, role: UserRole) {
         UserRole.TRAINER -> AuthRoutes.TRAINER_MODULE
         UserRole.PLAYER -> AuthRoutes.PLAYER_MODULE
         UserRole.PARENT -> AuthRoutes.PARENT_MODULE
-        UserRole.ADMIN -> AuthRoutes.PLAYER_MODULE
+        UserRole.ADMIN -> AuthRoutes.ADMIN_MODULE
     }
 
     navController.navigate(destination) {

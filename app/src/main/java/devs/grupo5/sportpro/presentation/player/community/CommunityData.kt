@@ -8,7 +8,7 @@ import devs.grupo5.sportpro.presentation.player.theme.PlayerPurple
 /**
  * Tono cromático del avatar de un autor dentro de la comunidad.
  */
-internal enum class AvatarTone {
+enum class AvatarTone {
     GREEN,
     BROWN,
     PURPLE
@@ -26,7 +26,7 @@ internal fun AvatarTone.contentColor(): Color = when (this) {
     AvatarTone.PURPLE -> Color.White
 }
 
-internal data class CommunityPost(
+data class CommunityPost(
     val id: String,
     val initials: String,
     val tone: AvatarTone,
@@ -48,16 +48,19 @@ internal data class OpenCallUp(
     val location: String
 )
 
-internal data class PostComment(
+data class PostComment(
     val id: String,
+    val postId: String = "post1", // Compatibilidad
+    val authorUid: String = "mock_uid", // Identificador de autor
     val initials: String,
     val tone: AvatarTone,
     val author: String,
     val text: String,
-    val meta: String?
+    val meta: String?,
+    val replyToId: String? = null
 )
 
-internal val communityPosts = listOf(
+val communityPosts = listOf(
     CommunityPost(
         id = "post1",
         initials = "AS",
@@ -117,7 +120,7 @@ internal val openCallUps = listOf(
     )
 )
 
-internal val postComments = listOf(
+val postComments = listOf(
     PostComment(
         id = "comment1",
         initials = "DH",
@@ -144,5 +147,5 @@ internal val postComments = listOf(
     )
 )
 
-internal fun findPostById(id: String): CommunityPost =
+fun findPostById(id: String): CommunityPost =
     communityPosts.firstOrNull { it.id == id } ?: communityPosts.last()

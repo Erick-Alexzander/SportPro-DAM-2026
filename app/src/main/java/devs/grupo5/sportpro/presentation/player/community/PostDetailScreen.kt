@@ -24,6 +24,10 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.SportsSoccer
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.foundation.clickable
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -32,6 +36,7 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -62,13 +67,25 @@ import devs.grupo5.sportpro.presentation.player.theme.SportProPlayerTheme
 
 @Composable
 fun PostDetailScreen(
+    authViewModel: devs.grupo5.sportpro.presentation.auth.AuthViewModel = androidx.lifecycle.viewmodel.compose.viewModel(),
     postId: String = "",
-    currentUserInitials: String = "CM",
     onBackClick: () -> Unit = {},
-    onTabSelected: (PlayerTab) -> Unit = {}
+    onTabSelected: (PlayerTab) -> Unit = {},
+    onUserProfileClick: (String) -> Unit = {}
 ) {
+    val currentUser by authViewModel.currentUser.collectAsState()
+    val uid = currentUser?.uid
+    
+    val communityRepo = devs.grupo5.sportpro.data.repository.MockPlayerCommunityRepository.instance
+    val commentsFlow by communityRepo.comments.collectAsState()
+
     val post = findPostById(postId)
     var commentText by remember { mutableStateOf("") }
+    var replyingTo by remember { mutableStateOf<PostComment?>(null) }
+    
+    var menuExpanded by remember { mutableStateOf(false) }
+    var showReportDialog by remember { mutableStateOf(false) }
+    var reportTarget by remember { mutableStateOf<Pair<devs.grupo5.sportpro.data.model.ReportTargetType, String>?>(null) }
 
     SportProPlayerTheme {
         Scaffold(
@@ -106,12 +123,28 @@ fun PostDetailScreen(
                         color = PlayerTextPrimary,
                         modifier = Modifier.weight(1f)
                     )
-                    IconButton(onClick = { }) {
-                        Icon(
-                            imageVector = Icons.Default.MoreVert,
-                            contentDescription = "Opciones de publicación",
-                            tint = PlayerTextPrimary
-                        )
+                    Box {
+                        IconButton(onClick = { menuExpanded = true }) {
+                            Icon(
+                                imageVector = Icons.Default.MoreVert,
+                                contentDescription = "Opciones de publicación",
+                                tint = PlayerTextPrimary
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = menuExpanded,
+                            onDismissRequest = { menuExpanded = false },
+                            containerColor = PlayerSurfaceVariant
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("Reportar publicación", color = Color.White) },
+                                onClick = {
+                                    menuExpanded = false
+                                    reportTarget = Pair(devs.grupo5.sportpro.data.model.ReportTargetType.PUBLICATION, post.id)
+                                    showReportDialog = true
+                                }
+                            )
+                        }
                     }
                 }
 
@@ -123,12 +156,15 @@ fun PostDetailScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     item {
-                        MainPostCard(post = post)
+                        MainPostCard(post = post, onProfileClick = { onUserProfileClick("mock_author") })
                     }
 
+                    val visibleComments = commentsFlow.filter { c ->
+                        c.postId == post.id && devs.grupo5.sportpro.data.repository.MockReportRepository.instance.getContentModerationStatus(c.id) == devs.grupo5.sportpro.data.model.ContentModerationStatus.VISIBLE
+                    }
                     item {
                         Text(
-                            text = "${postComments.size} Comentarios",
+                            text = "${visibleComments.size} Comentarios",
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Bold,
                             color = PlayerTextPrimary,
@@ -136,28 +172,80 @@ fun PostDetailScreen(
                         )
                     }
 
-                    items(postComments, key = { it.id }) { comment ->
-                        CommentCard(comment = comment)
+                    items(visibleComments, key = { it.id }) { comment ->
+                        CommentCard(
+                            comment = comment,
+                            isOwnComment = comment.authorUid == uid,
+                            onReport = { 
+                                reportTarget = Pair(devs.grupo5.sportpro.data.model.ReportTargetType.COMMENT, comment.id)
+                                showReportDialog = true
+                            },
+                            onDelete = {
+                                uid?.let { currentUid ->
+                                    communityRepo.deleteComment(comment.id, currentUid)
+                                }
+                            },
+                            onReply = { replyingTo = comment },
+                            onProfileClick = { onUserProfileClick(comment.authorUid) }
+                        )
                     }
 
                     item { Spacer(modifier = Modifier.height(8.dp)) }
                 }
 
                 HorizontalDivider(thickness = 0.5.dp, color = PlayerBorder)
+                
+                if (replyingTo != null) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(PlayerSurfaceVariant)
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Respondiendo a ${replyingTo!!.author}", color = PlayerNeonGreen, fontSize = 12.sp)
+                        IconButton(onClick = { replyingTo = null }, modifier = Modifier.size(20.dp)) {
+                            Icon(Icons.Default.Close, contentDescription = "Cancelar respuesta", tint = Color.White)
+                        }
+                    }
+                }
 
                 CommentInputBar(
-                    initials = currentUserInitials,
+                    initials = currentUser?.firstName?.take(1) ?: "U",
                     value = commentText,
                     onValueChange = { commentText = it },
-                    onSendClick = { commentText = "" }
+                    onSendClick = {
+                        if (commentText.isNotBlank() && uid != null) {
+                            communityRepo.addComment(
+                                postId = post.id,
+                                authorUid = uid,
+                                authorName = currentUser?.firstName ?: "Usuario",
+                                text = commentText,
+                                replyToId = replyingTo?.id
+                            )
+                            commentText = ""
+                            replyingTo = null
+                        }
+                    }
                 )
             }
         }
     }
+    
+    if (showReportDialog && reportTarget != null) {
+        devs.grupo5.sportpro.presentation.components.ReportDialog(
+            targetType = reportTarget!!.first,
+            targetId = reportTarget!!.second,
+            parentPostId = post.id,
+            reporterUid = uid,
+            onDismiss = { showReportDialog = false; reportTarget = null }
+        )
+    }
 }
 
 @Composable
-private fun MainPostCard(post: CommunityPost) {
+private fun MainPostCard(post: CommunityPost, onProfileClick: () -> Unit) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -171,10 +259,11 @@ private fun MainPostCard(post: CommunityPost) {
                     initials = post.initials,
                     tone = post.tone,
                     size = 44.dp,
-                    fontSize = 16.sp
+                    fontSize = 16.sp,
+                    modifier = Modifier.clickable { onProfileClick() }
                 )
                 Spacer(modifier = Modifier.width(12.dp))
-                Column(modifier = Modifier.weight(1f)) {
+                Column(modifier = Modifier.weight(1f).clickable { onProfileClick() }) {
                     Text(
                         text = post.author,
                         fontSize = 15.sp,
@@ -235,13 +324,24 @@ private fun MainPostCard(post: CommunityPost) {
 }
 
 @Composable
-private fun CommentCard(comment: PostComment) {
+private fun CommentCard(
+    comment: PostComment, 
+    isOwnComment: Boolean,
+    onReport: () -> Unit,
+    onDelete: () -> Unit,
+    onReply: () -> Unit,
+    onProfileClick: () -> Unit
+) {
+    var menuExpanded by remember { mutableStateOf(false) }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
+
     Row(modifier = Modifier.fillMaxWidth()) {
         Avatar(
             initials = comment.initials,
             tone = comment.tone,
             size = 38.dp,
-            fontSize = 14.sp
+            fontSize = 14.sp,
+            modifier = Modifier.clickable { onProfileClick() }
         )
 
         Spacer(modifier = Modifier.width(12.dp))
@@ -251,8 +351,17 @@ private fun CommentCard(comment: PostComment) {
                 text = comment.author,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Bold,
-                color = PlayerTextPrimary
+                color = PlayerTextPrimary,
+                modifier = Modifier.clickable { onProfileClick() }
             )
+            
+            if (comment.replyToId != null) {
+                Text(
+                    text = "Respondiendo...",
+                    fontSize = 11.sp,
+                    color = PlayerNeonGreen
+                )
+            }
             Spacer(modifier = Modifier.height(3.dp))
             Text(
                 text = comment.text,
@@ -269,6 +378,69 @@ private fun CommentCard(comment: PostComment) {
                 )
             }
         }
+        
+        Box {
+            IconButton(onClick = { menuExpanded = true }, modifier = Modifier.size(24.dp)) {
+                Icon(
+                    imageVector = Icons.Default.MoreVert,
+                    contentDescription = "Más opciones",
+                    tint = PlayerTextMuted,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+            DropdownMenu(
+                expanded = menuExpanded,
+                onDismissRequest = { menuExpanded = false },
+                containerColor = PlayerSurfaceVariant
+            ) {
+                DropdownMenuItem(
+                    text = { Text("Responder", color = Color.White) },
+                    onClick = {
+                        menuExpanded = false
+                        onReply()
+                    }
+                )
+                if (isOwnComment) {
+                    DropdownMenuItem(
+                        text = { Text("Eliminar", color = Color(0xFFD50000)) },
+                        onClick = {
+                            menuExpanded = false
+                            showDeleteConfirm = true
+                        }
+                    )
+                } else {
+                    DropdownMenuItem(
+                        text = { Text("Reportar comentario", color = Color.White) },
+                        onClick = {
+                            menuExpanded = false
+                            onReport()
+                        }
+                    )
+                }
+            }
+        }
+    }
+
+    if (showDeleteConfirm) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            title = { Text("Eliminar comentario", color = Color.White) },
+            text = { Text("¿Estás seguro de que deseas eliminar este comentario?", color = PlayerTextSecondary) },
+            confirmButton = {
+                androidx.compose.material3.Button(
+                    onClick = { onDelete(); showDeleteConfirm = false },
+                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = Color(0xFFD50000))
+                ) {
+                    Text("Eliminar", color = Color.White)
+                }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(onClick = { showDeleteConfirm = false }) {
+                    Text("Cancelar", color = Color.Gray)
+                }
+            },
+            containerColor = PlayerSurface
+        )
     }
 }
 
@@ -339,10 +511,11 @@ private fun Avatar(
     initials: String,
     tone: AvatarTone,
     size: Dp,
-    fontSize: TextUnit
+    fontSize: TextUnit,
+    modifier: Modifier = Modifier
 ) {
     Box(
-        modifier = Modifier
+        modifier = modifier
             .size(size)
             .clip(CircleShape)
             .background(tone.backgroundColor()),

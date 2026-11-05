@@ -25,14 +25,21 @@ import androidx.compose.material.icons.filled.ChatBubbleOutline
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -56,9 +63,12 @@ import devs.grupo5.sportpro.presentation.trainer.theme.SportProTextSecondary
 @Composable
 fun CommunityScreen(
     viewModel: CommunityViewModel = viewModel(),
+    authViewModel: devs.grupo5.sportpro.presentation.auth.AuthViewModel = viewModel(),
     onCreatePostClick: () -> Unit = {}
 ) {
     val posts by viewModel.posts.collectAsState()
+    val currentUser by authViewModel.currentUser.collectAsState()
+    val uid = currentUser?.uid
 
     Box(
         modifier = Modifier
@@ -114,7 +124,13 @@ fun CommunityScreen(
             } else {
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     items(posts, key = { it.id }) { post ->
-                        PostCard(post = post, onLikeClick = { viewModel.toggleLike(post.id) })
+                        if (devs.grupo5.sportpro.data.repository.MockReportRepository.instance.getContentModerationStatus(post.id) == devs.grupo5.sportpro.data.model.ContentModerationStatus.VISIBLE) {
+                            PostCard(
+                                post = post, 
+                                currentUserUid = uid,
+                                onLikeClick = { viewModel.toggleLike(post.id) }
+                            )
+                        }
                     }
                 }
             }
@@ -125,8 +141,12 @@ fun CommunityScreen(
 @Composable
 fun PostCard(
     post: Post,
+    currentUserUid: String?,
     onLikeClick: () -> Unit
 ) {
+    var menuExpanded by remember { mutableStateOf(false) }
+    var showReportDialog by remember { mutableStateOf(false) }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -162,7 +182,28 @@ fun PostCard(
                     }
                 }
 
-                CategoryChip(category = post.category)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    CategoryChip(category = post.category)
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Box {
+                        IconButton(onClick = { menuExpanded = true }) {
+                            Icon(imageVector = Icons.Default.MoreVert, contentDescription = "Opciones", tint = SportProTextSecondary)
+                        }
+                        DropdownMenu(
+                            expanded = menuExpanded,
+                            onDismissRequest = { menuExpanded = false },
+                            containerColor = SportProCardBorder
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("Reportar publicación", color = Color.White) },
+                                onClick = {
+                                    menuExpanded = false
+                                    showReportDialog = true
+                                }
+                            )
+                        }
+                    }
+                }
             }
 
             // Match Summary Highlight Header if present
@@ -267,5 +308,14 @@ fun PostCard(
                 }
             }
         }
+    }
+
+    if (showReportDialog) {
+        devs.grupo5.sportpro.presentation.components.ReportDialog(
+            targetType = devs.grupo5.sportpro.data.model.ReportTargetType.PUBLICATION,
+            targetId = post.id,
+            reporterUid = currentUserUid,
+            onDismiss = { showReportDialog = false }
+        )
     }
 }

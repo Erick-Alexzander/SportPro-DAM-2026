@@ -26,11 +26,14 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.SportsSoccer
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -64,10 +67,14 @@ private enum class CommunityTab(val title: String) {
 
 @Composable
 fun CommunityScreen(
+    authViewModel: devs.grupo5.sportpro.presentation.auth.AuthViewModel = androidx.lifecycle.viewmodel.compose.viewModel(),
     onCreatePostClick: () -> Unit = {},
     onPostClick: (String) -> Unit = {},
     onTabSelected: (PlayerTab) -> Unit = {}
 ) {
+    val currentUser by authViewModel.currentUser.collectAsState()
+    val uid = currentUser?.uid
+    
     var selectedTab by remember { mutableStateOf(CommunityTab.POSTS) }
     var selectedFilter by remember { mutableStateOf("Todos") }
 
@@ -121,10 +128,12 @@ fun CommunityScreen(
 
                 when (selectedTab) {
                     CommunityTab.POSTS -> PostsList(
+                        currentUserUid = uid,
                         onPostClick = onPostClick,
                         modifier = Modifier.weight(1f)
                     )
                     CommunityTab.CALL_UPS -> CallUpsList(
+                        currentUserUid = uid,
                         filters = callUpFilters,
                         selectedFilter = selectedFilter,
                         onFilterSelected = { selectedFilter = it },
@@ -205,6 +214,7 @@ private fun CommunityTabRow(
 
 @Composable
 private fun PostsList(
+    currentUserUid: String?,
     onPostClick: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -213,7 +223,9 @@ private fun PostsList(
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         items(communityPosts, key = { it.id }) { post ->
-            PostCard(post = post, onClick = { onPostClick(post.id) })
+            if (devs.grupo5.sportpro.data.repository.MockReportRepository.instance.getContentModerationStatus(post.id) == devs.grupo5.sportpro.data.model.ContentModerationStatus.VISIBLE) {
+                PostCard(post = post, currentUserUid = currentUserUid, onClick = { onPostClick(post.id) })
+            }
         }
         item { Spacer(modifier = Modifier.height(8.dp)) }
     }
@@ -222,8 +234,12 @@ private fun PostsList(
 @Composable
 private fun PostCard(
     post: CommunityPost,
+    currentUserUid: String?,
     onClick: () -> Unit
 ) {
+    var menuExpanded by remember { mutableStateOf(false) }
+    var showReportDialog by remember { mutableStateOf(false) }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -267,12 +283,27 @@ private fun PostCard(
                     )
                 }
 
-                IconButton(onClick = { }) {
-                    Icon(
-                        imageVector = Icons.Default.MoreVert,
-                        contentDescription = "Más opciones",
-                        tint = PlayerTextMuted
-                    )
+                Box {
+                    IconButton(onClick = { menuExpanded = true }) {
+                        Icon(
+                            imageVector = Icons.Default.MoreVert,
+                            contentDescription = "Más opciones",
+                            tint = PlayerTextMuted
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = menuExpanded,
+                        onDismissRequest = { menuExpanded = false },
+                        containerColor = PlayerSurfaceVariant
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Reportar publicación", color = Color.White) },
+                            onClick = {
+                                menuExpanded = false
+                                showReportDialog = true
+                            }
+                        )
+                    }
                 }
             }
 
@@ -307,6 +338,15 @@ private fun PostCard(
             }
         }
     }
+
+    if (showReportDialog) {
+        devs.grupo5.sportpro.presentation.components.ReportDialog(
+            targetType = devs.grupo5.sportpro.data.model.ReportTargetType.PUBLICATION,
+            targetId = post.id,
+            reporterUid = currentUserUid,
+            onDismiss = { showReportDialog = false }
+        )
+    }
 }
 
 @Composable
@@ -335,6 +375,7 @@ private fun PostImagePlaceholder() {
 
 @Composable
 private fun CallUpsList(
+    currentUserUid: String?,
     filters: List<String>,
     selectedFilter: String,
     onFilterSelected: (String) -> Unit,
@@ -373,7 +414,9 @@ private fun CallUpsList(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 items(callUps, key = { it.id }) { callUp ->
-                    CallUpCard(callUp = callUp)
+                    if (devs.grupo5.sportpro.data.repository.MockReportRepository.instance.getContentModerationStatus(callUp.id) == devs.grupo5.sportpro.data.model.ContentModerationStatus.VISIBLE) {
+                        CallUpCard(callUp = callUp, currentUserUid = currentUserUid)
+                    }
                 }
                 item { Spacer(modifier = Modifier.height(8.dp)) }
             }
@@ -409,7 +452,13 @@ private fun CallUpFilterChip(
 }
 
 @Composable
-private fun CallUpCard(callUp: OpenCallUp) {
+private fun CallUpCard(
+    callUp: OpenCallUp,
+    currentUserUid: String?
+) {
+    var menuExpanded by remember { mutableStateOf(false) }
+    var showReportDialog by remember { mutableStateOf(false) }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -448,6 +497,28 @@ private fun CallUpCard(callUp: OpenCallUp) {
                         fontSize = 12.sp,
                         color = PlayerTextSecondary
                     )
+                }
+                Box {
+                    IconButton(onClick = { menuExpanded = true }) {
+                        Icon(
+                            imageVector = Icons.Default.MoreVert,
+                            contentDescription = "Más opciones",
+                            tint = PlayerTextMuted
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = menuExpanded,
+                        onDismissRequest = { menuExpanded = false },
+                        containerColor = PlayerSurfaceVariant
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Reportar convocatoria", color = Color.White) },
+                            onClick = {
+                                menuExpanded = false
+                                showReportDialog = true
+                            }
+                        )
+                    }
                 }
             }
 
@@ -496,6 +567,15 @@ private fun CallUpCard(callUp: OpenCallUp) {
                 )
             }
         }
+    }
+
+    if (showReportDialog) {
+        devs.grupo5.sportpro.presentation.components.ReportDialog(
+            targetType = devs.grupo5.sportpro.data.model.ReportTargetType.TRYOUT,
+            targetId = callUp.id,
+            reporterUid = currentUserUid,
+            onDismiss = { showReportDialog = false }
+        )
     }
 }
 
