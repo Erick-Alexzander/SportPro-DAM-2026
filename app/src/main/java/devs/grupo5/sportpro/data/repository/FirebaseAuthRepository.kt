@@ -185,6 +185,39 @@ class FirebaseAuthRepository private constructor() : AuthRepository {
         }
     }
 
+    override suspend fun updateProfile(profile: UserProfile): Result<UserProfile> {
+        val currentUid = auth.currentUser?.uid
+            ?: return Result.failure(Exception("No hay una sesión activa para actualizar el perfil"))
+        if (profile.uid != currentUid) {
+            return Result.failure(Exception("No puedes modificar el perfil de otro usuario"))
+        }
+
+        return try {
+            firestore.collection("users").document(currentUid).set(profile).await()
+            _currentUser.value = profile
+            Result.success(profile)
+        } catch (e: Exception) {
+            Result.failure(Exception(e.message ?: "No se pudo guardar el perfil"))
+        }
+    }
+
+    override suspend fun getUserProfile(uid: String): Result<UserProfile> {
+        if (uid.isBlank()) {
+            return Result.failure(Exception("Identificador de usuario inválido"))
+        }
+        return try {
+            val doc = firestore.collection("users").document(uid).get().await()
+            if (!doc.exists()) {
+                return Result.failure(Exception("El perfil no existe"))
+            }
+            val profile = doc.toObject(UserProfile::class.java)
+                ?: return Result.failure(Exception("No se pudo leer el perfil"))
+            Result.success(profile.copy(uid = uid))
+        } catch (e: Exception) {
+            Result.failure(Exception(e.message ?: "No se pudo cargar el perfil"))
+        }
+    }
+
     override fun logout() {
         auth.signOut()
         _currentUser.value = null
