@@ -103,6 +103,7 @@ fun LiveMatchScreen(
 ) {
     val matches by viewModel.matches.collectAsState()
     val match = matches.find { it.id == matchId } ?: viewModel.getMatchById(matchId)
+    val teams by viewModel.teams.collectAsState()
     val toastMessage by viewModel.eventConfirmationToast.collectAsState()
 
     var activeModalEvent by remember { mutableStateOf<QuickEventOption?>(null) }
@@ -112,6 +113,8 @@ fun LiveMatchScreen(
         match?.teamId?.let { viewModel.getPlayersForTeam(it) } ?: emptyList() 
     }
     
+    val team = teams.find { it.id == match?.teamId }
+    val sportProName = team?.name ?: "Equipo no disponible"
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
@@ -296,7 +299,7 @@ fun LiveMatchScreen(
                                 modifier = Modifier.weight(1f)
                             ) {
                                 Text(
-                                    text = if (match.isHome) "SportPro" else match.rival,
+                                    text = if (match.isHome) sportProName else match.rival,
                                     fontSize = 17.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = SportProTextPrimary
@@ -357,7 +360,7 @@ fun LiveMatchScreen(
                                 modifier = Modifier.weight(1f)
                             ) {
                                 Text(
-                                    text = if (match.isHome) match.rival else "SportPro",
+                                    text = if (match.isHome) match.rival else sportProName,
                                     fontSize = 17.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = SportProTextPrimary
@@ -462,7 +465,8 @@ fun LiveMatchScreen(
                         )
                     }
                 } else {
-                    val recentEvents = match.events.takeLast(4).reversed()
+                    val sortedEvents = match.events.sortedBy { it.minute }
+                    val recentEvents = sortedEvents.takeLast(4)
                     recentEvents.forEach { ev ->
                         EventRowItem(event = ev)
                         Spacer(modifier = Modifier.height(8.dp))
@@ -506,13 +510,16 @@ fun LiveMatchScreen(
 
         // Modal BottomSheet for Register Event
         activeModalEvent?.let { opt ->
-            val localTeamNameStr = if (match.isHome) "SportPro (Local)" else "${match.rival} (Local)"
+            val localTeamNameStr = if (match.isHome) sportProName else match.rival
+            val awayTeamNameStr = if (match.isHome) match.rival else sportProName
             RegisterEventBottomSheet(
                 eventOption = opt,
                 match = match,
                 sportProPlayers = sportProPlayers,
+                localTeamName = localTeamNameStr,
+                awayTeamName = awayTeamNameStr,
                 onDismiss = { activeModalEvent = null },
-                onConfirm = { minute, team, player, status, detail ->
+                onConfirm = { minute, team, player, detail ->
                     if (match.status != "En vivo") {
                         scope.launch { snackbarHostState.showSnackbar("No se pueden registrar eventos si el partido no está en vivo") }
                         return@RegisterEventBottomSheet
@@ -524,8 +531,8 @@ fun LiveMatchScreen(
                         eventType = opt.type,
                         icon = opt.icon,
                         player = player,
-                        team = if (team == localTeamNameStr) "Local" else "Visitante",
-                        status = status,
+                        team = team,
+                        status = "Pendiente", // Esto puede usarse internamente, el Firebase Repo solo mira 'team' para sumar.
                         detail = detail
                     )
                     activeModalEvent = null
@@ -570,8 +577,9 @@ fun LiveMatchScreen(
                     if (match.events.isEmpty()) {
                         Text("No hay eventos.", color = SportProTextMuted)
                     } else {
+                        val sortedEvents = match.events.sortedBy { it.minute }
                         LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            items(match.events.reversed(), key = { it.id }) { ev ->
+                            items(sortedEvents, key = { it.id }) { ev ->
                                 EventRowItem(event = ev)
                             }
                         }
@@ -653,8 +661,12 @@ fun EventRowItem(event: MatchEvent) {
                 }
             }
 
-            // Status Badge (Local, Visitante, Corregido, Anulado, Pendiente)
-            EventStatusChip(status = event.status)
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                if (event.status.lowercase() == "corregido" || event.status.lowercase() == "anulado") {
+                    EventStatusChip(status = event.status)
+                }
+                EventStatusChip(status = event.team)
+            }
         }
     }
 }
@@ -664,9 +676,9 @@ fun EventStatusChip(status: String) {
     val (bgColor, textColor) = when (status.lowercase()) {
         "corregido" -> Pair(SportProWarning.copy(alpha = 0.2f), SportProWarning)
         "anulado" -> Pair(SportProError.copy(alpha = 0.2f), SportProError)
-        "pendiente" -> Pair(SportProCardBorder, SportProTextMuted)
         "visitante" -> Pair(SportProGreenContainer, SportProGreen)
-        else -> Pair(SportProGreenContainer, SportProGreen)
+        "local" -> Pair(SportProGreenContainer, SportProGreen)
+        else -> Pair(SportProCardBorder, SportProTextMuted)
     }
 
     Box(
@@ -690,19 +702,17 @@ fun RegisterEventBottomSheet(
     eventOption: QuickEventOption,
     match: Match,
     sportProPlayers: List<devs.grupo5.sportpro.data.model.Player>,
+    localTeamName: String,
+    awayTeamName: String,
     onDismiss: () -> Unit,
-    onConfirm: (minute: Int, team: String, player: String, status: String, detail: String) -> Unit
+    onConfirm: (minute: Int, team: String, player: String, detail: String) -> Unit
 ) {
     var minute by remember { mutableIntStateOf(match.currentMinute) }
     
-    val localTeamName = if (match.isHome) "SportPro (Local)" else "${match.rival} (Local)"
-    val awayTeamName = if (match.isHome) "${match.rival} (Vis.)" else "SportPro (Vis.)"
-    
-    var selectedTeam by remember { mutableStateOf(localTeamName) }
+    // Aquí el botón internamente manda "Local" o "Visitante" para preservar la integridad del ViewModel
+    var selectedTeam by remember { mutableStateOf("Local") }
 
-
-    
-    val isSportProSelected = if (match.isHome) selectedTeam == localTeamName else selectedTeam == awayTeamName
+    val isSportProSelected = if (match.isHome) selectedTeam == "Local" else selectedTeam == "Visitante"
     val availablePlayers = if (isSportProSelected) sportProPlayers.map { it.fullName } else emptyList()
 
     var selectedPlayer by remember { mutableStateOf("") }
@@ -819,8 +829,14 @@ fun RegisterEventBottomSheet(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                listOf(localTeamName, awayTeamName).forEach { t ->
-                    val isSelected = selectedTeam == t
+                // Generamos los botones con su valor de display real, pero mapeados internamente a Local/Visitante.
+                val teamsConfig = listOf(
+                    Pair("Local", localTeamName),
+                    Pair("Visitante", awayTeamName)
+                )
+
+                teamsConfig.forEach { (internalKey, displayValue) ->
+                    val isSelected = selectedTeam == internalKey
                     Box(
                         modifier = Modifier
                             .weight(1f)
@@ -828,13 +844,13 @@ fun RegisterEventBottomSheet(
                             .background(if (isSelected) SportProGreen else SportProDarkBackground)
                             .border(1.dp, if (isSelected) SportProGreen else SportProCardBorder, RoundedCornerShape(10.dp))
                             .clickable {
-                                selectedTeam = t
+                                selectedTeam = internalKey
                             }
                             .padding(vertical = 10.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = t,
+                            text = displayValue,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
                             color = if (isSelected) Color.Black else SportProTextPrimary
@@ -943,7 +959,7 @@ fun RegisterEventBottomSheet(
             Button(
                 onClick = {
                     val finalPlayer = if (customPlayerText.isNotBlank()) customPlayerText.trim() else selectedPlayer
-                    val shortTeamName = if (selectedTeam == localTeamName) "Local" else "Visitante"
+                    val shortTeamName = selectedTeam
                     
                     if (minute <= 0) {
                         showError = "El minuto debe ser mayor a 0."
@@ -963,7 +979,7 @@ fun RegisterEventBottomSheet(
                     // We removed the eventStatusChoice selection since it shouldn't be mixed with teams.
                     // Instead, we just pass the shortTeamName as the status to maintain compatibility with the data model for now,
                     // or "Pendiente"/"Confirmado". We'll pass shortTeamName.
-                    onConfirm(minute, shortTeamName, finalPlayer, shortTeamName, additionalNotes.trim())
+                    onConfirm(minute, shortTeamName, finalPlayer, additionalNotes.trim())
                 },
                 modifier = Modifier
                     .fillMaxWidth()

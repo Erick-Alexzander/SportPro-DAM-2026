@@ -15,6 +15,7 @@ interface MatchRepository {
     suspend fun updateMatch(match: Match): Result<Unit>
     suspend fun addMatchEvent(matchId: String, event: MatchEvent): Result<Match?>
     suspend fun updateMatchScore(matchId: String, homeScore: Int, awayScore: Int): Result<Unit>
+    suspend fun startMatch(matchId: String): Result<Match?>
     suspend fun toggleMatchPause(matchId: String): Result<Unit>
     suspend fun updateMatchMinute(matchId: String, minute: Int): Result<Unit>
     suspend fun finishMatch(matchId: String): Result<Match?>
@@ -268,6 +269,18 @@ class MockMatchRepository private constructor() : MatchRepository {
             if (match.id == matchId) match.copy(homeScore = homeScore, awayScore = awayScore) else match
         }
         return Result.success(Unit)
+    }
+
+    override suspend fun startMatch(matchId: String): Result<Match?> {
+        var updated: Match? = null
+        _matches.value = _matches.value.map { match ->
+            if (match.id == matchId) {
+                val m = match.copy(status = "En vivo")
+                updated = m
+                m
+            } else match
+        }
+        return Result.success(updated)
     }
 
     override suspend fun toggleMatchPause(matchId: String): Result<Unit> {

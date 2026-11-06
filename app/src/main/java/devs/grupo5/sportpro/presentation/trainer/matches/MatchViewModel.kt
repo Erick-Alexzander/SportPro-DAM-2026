@@ -148,6 +148,20 @@ class MatchViewModel(
         }
     }
 
+    fun startMatch(matchId: String, onResult: (Boolean) -> Unit = {}) {
+        viewModelScope.launch {
+            _isLoading.value = true
+            val result = matchRepository.startMatch(matchId)
+            if (result.isSuccess) {
+                onResult(true)
+            } else {
+                _error.value = result.exceptionOrNull()?.message ?: "Error al iniciar partido"
+                onResult(false)
+            }
+            _isLoading.value = false
+        }
+    }
+
     fun finishMatch(matchId: String, onResult: (Boolean) -> Unit = {}) {
         viewModelScope.launch {
             _isLoading.value = true

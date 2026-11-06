@@ -201,6 +201,31 @@ class FirebaseMatchRepository private constructor() : MatchRepository {
         }
     }
 
+    override suspend fun startMatch(matchId: String): Result<Match?> {
+        val uid = auth.currentUser?.uid ?: return Result.failure(Exception("Usuario no autenticado"))
+        return try {
+            var updated: Match? = null
+            val docRef = firestore.collection("matches").document(matchId)
+            firestore.runTransaction { transaction ->
+                val snapshot = transaction.get(docRef)
+                if (snapshot.exists() && snapshot.getString("ownerUid") == uid) {
+                    val status = snapshot.getString("status")
+                    if (status != "Programado") {
+                        throw Exception("El partido no está programado.")
+                    }
+                    transaction.update(docRef, "status", "En vivo")
+                    val currentMatch = snapshot.toObject(Match::class.java)
+                    updated = currentMatch?.copy(status = "En vivo")
+                } else {
+                    throw Exception("No autorizado")
+                }
+            }.await()
+            Result.success(updated)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     override suspend fun toggleMatchPause(matchId: String): Result<Unit> {
         val uid = auth.currentUser?.uid ?: return Result.failure(Exception("Usuario no autenticado"))
         return try {

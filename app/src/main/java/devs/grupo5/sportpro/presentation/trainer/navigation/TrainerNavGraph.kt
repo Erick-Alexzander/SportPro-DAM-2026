@@ -288,6 +288,11 @@ fun TrainerMainContainerScreen(
                         onBackClick = { navController.popBackStack() },
                         onAiSummaryClick = { id ->
                             navController.navigate("ai_summary/$id")
+                        },
+                        onLiveMatchClick = { id ->
+                            navController.navigate("live_match/$id") {
+                                popUpTo(TrainerRoutes.MATCHES)
+                            }
                         }
                     )
                 }
