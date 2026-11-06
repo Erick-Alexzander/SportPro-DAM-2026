@@ -13,5 +13,6 @@ data class UserProfile(
     val lastName: String = "",
     val email: String = "",
     val role: UserRole = UserRole.TRAINER,
-    val birthDate: String? = null
+    val birthDate: String? = null,
+    val playerProfile: PlayerProfile = PlayerProfile()
 )

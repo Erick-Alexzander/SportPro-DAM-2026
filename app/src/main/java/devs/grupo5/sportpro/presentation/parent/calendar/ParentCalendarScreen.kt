@@ -54,11 +54,12 @@ fun ParentCalendarScreen(
     onEventClick: (ParentEvent) -> Unit = {}
 ) {
     var selectedFilter by remember { mutableStateOf(parentEventFilters.first()) }
+    val events = remember(childCategory) { parentEventsFor(childCategory) }
 
     val filteredEvents = when (selectedFilter) {
-        "Entrenamientos" -> parentEvents.filter { it.type == ParentEventType.ENTRENAMIENTO }
-        "Partidos" -> parentEvents.filter { it.type == ParentEventType.PARTIDO }
-        else -> parentEvents
+        "Entrenamientos" -> events.filter { it.type == ParentEventType.ENTRENAMIENTO }
+        "Partidos" -> events.filter { it.type == ParentEventType.PARTIDO }
+        else -> events
     }
 
     Column(

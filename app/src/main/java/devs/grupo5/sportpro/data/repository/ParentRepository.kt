@@ -9,6 +9,8 @@ import devs.grupo5.sportpro.data.model.MonthlyPayment
 import devs.grupo5.sportpro.data.model.ParentNotification
 import devs.grupo5.sportpro.data.model.PaymentStatus
 import devs.grupo5.sportpro.data.model.UserProfile
+import devs.grupo5.sportpro.data.model.currentPaymentPeriod
+import java.time.LocalDateTime
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -82,8 +84,8 @@ class MockParentRepository private constructor(
                 birthDate = "2009-06-22",
                 heightCm = 162,
                 weightKg = 55,
-                phone = "+56 9 4321 0987",
-                emergencyPhone = "+56 9 5555 0187",
+                phone = "+51 943 210 987",
+                emergencyPhone = "+51 955 550 187",
                 status = "Activo",
                 stats = ChildStats(
                     goals = 8,
@@ -101,35 +103,13 @@ class MockParentRepository private constructor(
 
     private val _payment = MutableStateFlow(
         MonthlyPayment(
-            period = "Nov 2024",
             status = PaymentStatus.PENDIENTE,
             receiptRegistered = false
         )
     )
     override val payment: StateFlow<MonthlyPayment> = _payment.asStateFlow()
 
-    private val _notifications = MutableStateFlow(
-        listOf(
-            ParentNotification(
-                id = "n1",
-                title = "Convocatoria confirmada",
-                body = "Felipe fue convocado para el partido vs. Deportes Centro este sábado a las 10:00.",
-                time = "Hace 2h"
-            ),
-            ParentNotification(
-                id = "n2",
-                title = "Mensualidad pendiente",
-                body = "La mensualidad de Nov 2024 sigue pendiente de regularización.",
-                time = "Hace 6h"
-            ),
-            ParentNotification(
-                id = "n3",
-                title = "Nuevo comunicado",
-                body = "La academia publicó el calendario de días para la segunda quincena.",
-                time = "Ayer"
-            )
-        )
-    )
+    private val _notifications = MutableStateFlow(defaultNotifications())
     override val notifications: StateFlow<List<ParentNotification>> = _notifications.asStateFlow()
 
     init {
@@ -141,29 +121,61 @@ class MockParentRepository private constructor(
         context?.let { ctx ->
             storage = ParentStorage(ctx, uid)
         }
-        
-        storage?.let { store ->
-            store.loadGuardian()?.let { _guardian.value = it }
-            val stored = store.loadChildren()
-            if (stored.isNotEmpty()) {
-                _linkedChildren.value = stored
-                _selectedChildId.value = store.loadSelectedChildId()
-                    ?.takeIf { id -> stored.any { it.id == id } }
-                    ?: stored.first().id
-            } else {
-                _linkedChildren.value = emptyList() // Clear previous mock data from memory
-                _selectedChildId.value = null
-            }
-            store.loadPayment()?.let { _payment.value = it }
+        val store = storage
+
+        // Reinicia todo el estado para no mezclar datos entre cuentas de apoderados.
+        _guardian.value = store?.loadGuardian() ?: GuardianProfile()
+        val storedChildren = store?.loadChildren().orEmpty()
+        _linkedChildren.value = storedChildren
+        _selectedChildId.value = if (storedChildren.isEmpty()) {
+            null
+        } else {
+            store?.loadSelectedChildId()
+                ?.takeIf { id -> storedChildren.any { it.id == id } }
+                ?: storedChildren.first().id
         }
-        
+        val storedPayment = store?.loadPayment()
+        _payment.value = if (storedPayment == null || storedPayment.period != currentPaymentPeriod()) {
+            MonthlyPayment().also { store?.savePayment(it) }
+        } else {
+            storedPayment
+        }
+        val storedNotifications = store?.loadNotifications().orEmpty()
+        _notifications.value = if (storedNotifications.isEmpty()) {
+            defaultNotifications().also { store?.saveNotifications(it) }
+        } else {
+            storedNotifications
+        }
+
         _guardian.value = _guardian.value.copy(
             firstName = user.firstName.ifBlank { _guardian.value.firstName },
             lastName = user.lastName.ifBlank { _guardian.value.lastName },
             email = user.email.ifBlank { _guardian.value.email }
         )
-        storage?.saveGuardian(_guardian.value)
+        store?.saveGuardian(_guardian.value)
     }
+
+    private fun defaultNotifications(now: LocalDateTime = LocalDateTime.now()): List<ParentNotification> =
+        listOf(
+            ParentNotification(
+                id = "n1",
+                title = "Convocatoria confirmada",
+                body = "Felipe fue convocado para el partido vs. Deportes Centro este sábado a las 10:00.",
+                createdAt = now.minusHours(2)
+            ),
+            ParentNotification(
+                id = "n2",
+                title = "Mensualidad pendiente",
+                body = "La mensualidad del período actual sigue pendiente de regularización.",
+                createdAt = now.minusHours(6)
+            ),
+            ParentNotification(
+                id = "n3",
+                title = "Nuevo comunicado",
+                body = "La academia publicó el calendario de días para la segunda quincena.",
+                createdAt = now.minusDays(1)
+            )
+        ).sortedByDescending { it.createdAt }
 
     override fun updateGuardian(profile: GuardianProfile) {
         _guardian.value = profile
@@ -222,6 +234,7 @@ class MockParentRepository private constructor(
 
     override fun markNotificationsAsRead() {
         _notifications.value = _notifications.value.map { it.copy(isRead = true) }
+        storage?.saveNotifications(_notifications.value)
     }
 
     companion object {

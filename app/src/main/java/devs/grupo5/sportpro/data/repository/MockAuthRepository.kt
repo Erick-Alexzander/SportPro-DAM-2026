@@ -80,6 +80,32 @@ class MockAuthRepository private constructor() : AuthRepository {
         return Result.success(newUser)
     }
 
+    override suspend fun updateProfile(profile: UserProfile): Result<UserProfile> {
+        val currentUid = _currentUser.value?.uid
+        if (currentUid == null || currentUid != profile.uid) {
+            return Result.failure(Exception("No hay una sesión activa para actualizar el perfil"))
+        }
+
+        val normalizedEmail = profile.email.lowercase().trim()
+        var storedPassword = ""
+        val entries = initialUsers.entries.toList()
+        entries.forEach { (email, pair) ->
+            if (pair.first.uid == profile.uid) {
+                storedPassword = pair.second
+                initialUsers.remove(email)
+            }
+        }
+        initialUsers[normalizedEmail] = Pair(profile, storedPassword)
+        _currentUser.value = profile
+        return Result.success(profile)
+    }
+
+    override suspend fun getUserProfile(uid: String): Result<UserProfile> {
+        val profile = initialUsers.values.map { it.first }.find { it.uid == uid }
+            ?: return Result.failure(Exception("Perfil no encontrado"))
+        return Result.success(profile)
+    }
+
     override fun logout() {
         _currentUser.value = null
     }
