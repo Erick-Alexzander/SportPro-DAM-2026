@@ -26,6 +26,7 @@ import devs.grupo5.sportpro.presentation.player.matches.MatchDetailScreen
 import devs.grupo5.sportpro.presentation.player.matches.MatchesScreen
 import devs.grupo5.sportpro.presentation.player.notifications.NotificationsScreen
 import devs.grupo5.sportpro.presentation.player.privacy.PrivacyScreen
+import devs.grupo5.sportpro.presentation.player.profile.EditPlayerProfileScreen
 import devs.grupo5.sportpro.presentation.player.profile.ProfileScreen
 import devs.grupo5.sportpro.presentation.player.settings.SettingsScreen
 
@@ -39,6 +40,7 @@ object PlayerRoutes {
     const val MATCHES = "player_matches"
     const val MATCH_DETAIL = "player_match_detail/{matchId}"
     const val PROFILE = "player_profile"
+    const val EDIT_PROFILE = "player_edit_profile"
     const val NOTIFICATIONS = "player_notifications"
     const val PRIVACY = "player_privacy"
     const val SETTINGS = "player_settings"
@@ -162,20 +164,34 @@ fun PlayerMainContainerScreen(
                 else -> "Jugador"
             }
             val computedInitials = initialsOf(currentUser)
+            val playerProfile = currentUser?.playerProfile ?: devs.grupo5.sportpro.data.model.PlayerProfile()
 
             ProfileScreen(
                 fullName = registeredName,
                 email = registeredEmail,
                 role = roleLabel,
+                academy = playerProfile.teamName.ifBlank { "Academia SportPro" },
+                category = playerProfile.category,
                 birthDate = currentUser?.birthDate,
                 initials = computedInitials,
+                playerProfile = playerProfile,
+                uid = currentUser?.uid ?: "",
                 onBackClick = { navController.popBackStack() },
+                onEditPhotoClick = { navController.navigate(PlayerRoutes.EDIT_PROFILE) },
+                onEditProfileClick = { navController.navigate(PlayerRoutes.EDIT_PROFILE) },
                 onNotificationsClick = { navController.navigate(PlayerRoutes.NOTIFICATIONS) },
                 onPrivacyClick = { navController.navigate(PlayerRoutes.PRIVACY) },
                 onSettingsClick = { navController.navigate(PlayerRoutes.SETTINGS) },
                 onHelpClick = { navController.navigate(PlayerRoutes.HELP) },
                 onLogoutClick = onLogoutSuccess,
                 onTabSelected = { tab -> navigateToTab(navController, tab) }
+            )
+        }
+
+        composable(PlayerRoutes.EDIT_PROFILE) {
+            EditPlayerProfileScreen(
+                onBackClick = { navController.popBackStack() },
+                onSaved = { navController.popBackStack() }
             )
         }
 

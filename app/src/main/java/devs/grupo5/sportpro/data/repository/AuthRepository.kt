@@ -19,5 +19,9 @@ interface AuthRepository {
         birthDate: String? = null
     ): Result<UserProfile>
 
+    suspend fun updateProfile(profile: UserProfile): Result<UserProfile>
+
+    suspend fun getUserProfile(uid: String): Result<UserProfile>
+
     fun logout()
 }

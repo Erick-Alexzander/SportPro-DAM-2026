@@ -54,6 +54,7 @@ dependencies {
     implementation("com.google.firebase:firebase-auth")
     implementation("com.google.firebase:firebase-firestore")
     implementation(libs.firebase.database)
+    implementation("com.google.zxing:core:3.5.3")
 
     testImplementation(libs.junit)
 
