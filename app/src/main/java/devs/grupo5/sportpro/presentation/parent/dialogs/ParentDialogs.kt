@@ -50,8 +50,13 @@ import devs.grupo5.sportpro.data.model.GuardianTitle
 import devs.grupo5.sportpro.data.model.LinkedChild
 import devs.grupo5.sportpro.data.model.MonthlyPayment
 import devs.grupo5.sportpro.data.model.ParentNotification
+import devs.grupo5.sportpro.data.model.MINOR_MAX_AGE
 import devs.grupo5.sportpro.data.model.PaymentStatus
-import devs.grupo5.sportpro.data.model.isValidBirthDate
+import devs.grupo5.sportpro.data.model.ageInYears
+import devs.grupo5.sportpro.data.model.formatPeruvianMobile
+import devs.grupo5.sportpro.data.model.isValidMinorBirthDate
+import devs.grupo5.sportpro.data.model.isValidPeruvianMobile
+import devs.grupo5.sportpro.data.model.nationalPeruvianMobile
 import devs.grupo5.sportpro.data.model.normalizeBirthDate
 import devs.grupo5.sportpro.presentation.parent.components.ParentMetricTile
 import devs.grupo5.sportpro.presentation.parent.components.ParentStatusPill
@@ -92,8 +97,8 @@ fun RegisterChildDialog(
     val relations = listOf("Padre", "Madre", "Apoderado(a)")
     
     val isEditing = initialChild != null
-    val isValid = firstName.isNotBlank() && lastName.isNotBlank() && parentRelation.isNotBlank() && birthDate.isNotBlank() &&
-        (jerseyNumber.toIntOrNull() ?: 0) in 1..99
+    val isValid = firstName.isNotBlank() && lastName.isNotBlank() && parentRelation.isNotBlank() &&
+        birthDate.isValidMinorBirthDate() && (jerseyNumber.toIntOrNull() ?: 0) in 1..99
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -149,7 +154,7 @@ fun RegisterChildDialog(
                             onValueChange = {},
                             placeholder = "2010-05-18",
                             readOnly = true,
-                            isError = showErrors && birthDate.isBlank()
+                            isError = showErrors && !birthDate.isValidMinorBirthDate()
                         )
                         Box(
                             modifier = Modifier
@@ -165,6 +170,13 @@ fun RegisterChildDialog(
                         modifier = Modifier.weight(1f),
                         keyboardType = KeyboardType.Number,
                         isError = showErrors && (jerseyNumber.toIntOrNull() ?: 0) !in 1..99
+                    )
+                }
+                if (showErrors && !birthDate.isValidMinorBirthDate()) {
+                    Text(
+                        text = "La fecha de nacimiento debe corresponder a un menor de 0 a 17 años.",
+                        color = ParentWarning,
+                        fontSize = 11.sp
                     )
                 }
 
@@ -232,7 +244,7 @@ fun RegisterChildDialog(
                                 firstName = firstName.trim(),
                                 lastName = lastName.trim(),
                                 category = category,
-                                birthDate = birthDate,
+                                birthDate = birthDate.normalizeBirthDate(),
                                 jerseyNumber = jerseyNumber.toIntOrNull() ?: 0,
                                 position = position,
                                 parentRelation = parentRelation
@@ -494,7 +506,7 @@ fun NotificationsDialog(
                                 )
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text(
-                                    text = notification.time,
+                                    text = notification.relativeTimeLabel(),
                                     fontSize = 11.sp,
                                     color = ParentTextMuted
                                 )
@@ -722,25 +734,13 @@ fun ChildPhysicalDataDialog(
     var showErrors by remember { mutableStateOf(false) }
     var showDatePicker by remember { mutableStateOf(false) }
     
-    val computedAge = remember(birthDate) {
-        if (birthDate.isBlank()) 0 else {
-            runCatching {
-                val date = java.time.LocalDate.parse(birthDate)
-                val today = java.time.LocalDate.now()
-                var a = today.year - date.year
-                if (today.monthValue < date.monthValue || (today.monthValue == date.monthValue && today.dayOfMonth < date.dayOfMonth)) {
-                    a--
-                }
-                a.coerceAtLeast(0)
-            }.getOrDefault(0)
-        }
-    }
+    val computedAge = remember(birthDate) { birthDate.ageInYears() ?: 0 }
 
     val heightValue = height.toIntOrNull() ?: 0
     val weightValue = weight.toIntOrNull() ?: 0
     val isValid = heightValue in 80..250 &&
         weightValue in 20..200 &&
-        birthDate.isValidBirthDate()
+        birthDate.isValidMinorBirthDate()
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -776,7 +776,7 @@ fun ChildPhysicalDataDialog(
                             onValueChange = {},
                             placeholder = "2010-05-18",
                             readOnly = true,
-                            isError = showErrors && !birthDate.isValidBirthDate()
+                            isError = showErrors && !birthDate.isValidMinorBirthDate()
                         )
                         Box(
                             modifier = Modifier
@@ -812,6 +812,13 @@ fun ChildPhysicalDataDialog(
                     fontSize = 11.sp,
                     color = ParentTextMuted
                 )
+                if (showErrors && !birthDate.isValidMinorBirthDate()) {
+                    Text(
+                        text = "La fecha de nacimiento debe corresponder a un menor de 0 a 17 años.",
+                        color = ParentWarning,
+                        fontSize = 11.sp
+                    )
+                }
 
                 Row(
                     modifier = Modifier
@@ -893,16 +900,12 @@ fun ChildContactDialog(
     onDismiss: () -> Unit = {},
     onSave: (LinkedChild) -> Unit = {}
 ) {
-    // Maintain existing digits to not truncate silently if it had >9 digits previously
-    var phone by remember { mutableStateOf(child.phone.filter { it.isDigit() }.removePrefix("51")) }
-    var emergencyPhone by remember { mutableStateOf(child.emergencyPhone.filter { it.isDigit() }.removePrefix("51")) }
+    // Normaliza números guardados con o sin código de país para mostrarlos como 9 dígitos.
+    var phone by remember { mutableStateOf(child.phone.nationalPeruvianMobile()) }
+    var emergencyPhone by remember { mutableStateOf(child.emergencyPhone.nationalPeruvianMobile()) }
     var showErrors by remember { mutableStateOf(false) }
 
-    fun isValidPeruvianPhone(value: String): Boolean {
-        return value.length == 9 && value.startsWith("9") && value.all { it.isDigit() }
-    }
-
-    val isValid = isValidPeruvianPhone(phone) && isValidPeruvianPhone(emergencyPhone)
+    val isValid = phone.isValidPeruvianMobile() && emergencyPhone.isValidPeruvianMobile()
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -925,46 +928,26 @@ fun ChildContactDialog(
                 ParentDialogField(
                     label = "TELÉFONO",
                     value = phone,
-                    onValueChange = { newValue -> 
-                        val digits = newValue.filter { it.isDigit() }
-                        if (digits.length <= 9) {
-                            phone = digits
-                        } else if (phone.length > 9) {
-                            // If the previous value was already > 9, we only allow truncation, not adding more
-                            if (digits.length < phone.length) {
-                                phone = digits
-                            }
-                        }
-                    },
+                    onValueChange = { newValue -> phone = newValue.filter(Char::isDigit).take(9) },
                     placeholder = "987654321",
                     keyboardType = KeyboardType.Phone,
                     prefix = { Text("+51 ", color = ParentTextMuted) },
-                    isError = showErrors && !isValidPeruvianPhone(phone)
+                    isError = showErrors && !phone.isValidPeruvianMobile()
                 )
-                if (showErrors && !isValidPeruvianPhone(phone)) {
+                if (showErrors && !phone.isValidPeruvianMobile()) {
                     Text("Debe ingresar exactamente 9 dígitos y empezar con 9", color = ParentWarning, fontSize = 11.sp)
                 }
 
                 ParentDialogField(
                     label = "CONTACTO DE EMERGENCIA",
                     value = emergencyPhone,
-                    onValueChange = { newValue -> 
-                        val digits = newValue.filter { it.isDigit() }
-                        if (digits.length <= 9) {
-                            emergencyPhone = digits
-                        } else if (emergencyPhone.length > 9) {
-                            // If the previous value was already > 9, we only allow truncation, not adding more
-                            if (digits.length < emergencyPhone.length) {
-                                emergencyPhone = digits
-                            }
-                        }
-                    },
+                    onValueChange = { newValue -> emergencyPhone = newValue.filter(Char::isDigit).take(9) },
                     placeholder = "987654321",
                     keyboardType = KeyboardType.Phone,
                     prefix = { Text("+51 ", color = ParentTextMuted) },
-                    isError = showErrors && !isValidPeruvianPhone(emergencyPhone)
+                    isError = showErrors && !emergencyPhone.isValidPeruvianMobile()
                 )
-                if (showErrors && !isValidPeruvianPhone(emergencyPhone)) {
+                if (showErrors && !emergencyPhone.isValidPeruvianMobile()) {
                     Text("Debe ingresar exactamente 9 dígitos y empezar con 9", color = ParentWarning, fontSize = 11.sp)
                 }
 
@@ -982,8 +965,8 @@ fun ChildContactDialog(
                     if (isValid) {
                         onSave(
                             child.copy(
-                                phone = "+51 $phone",
-                                emergencyPhone = "+51 $emergencyPhone"
+                                phone = phone.formatPeruvianMobile(),
+                                emergencyPhone = emergencyPhone.formatPeruvianMobile()
                             )
                         )
                     }
@@ -1217,6 +1200,13 @@ fun ParentDatePickerDialog(
     val limiteFecha = remember(hoy) {
         hoy.atTime(java.time.LocalTime.MAX).toInstant(java.time.ZoneOffset.UTC).toEpochMilli()
     }
+    // Un menor tiene entre 0 y 17 años: la fecha mínima es la que cumple 18 años hoy.
+    val fechaMinima = remember(hoy) {
+        hoy.minusYears(MINOR_MAX_AGE.toLong()).plusDays(1)
+    }
+    val limiteFechaMinima = remember(fechaMinima) {
+        fechaMinima.atStartOfDay(java.time.ZoneOffset.UTC).toInstant().toEpochMilli()
+    }
 
     val initialDate = runCatching { java.time.LocalDate.parse(initialDateStr) }.getOrNull()
 
@@ -1225,10 +1215,13 @@ fun ParentDatePickerDialog(
             ?.atStartOfDay(java.time.ZoneOffset.UTC)
             ?.toInstant()
             ?.toEpochMilli(),
-        selectableDates = remember(limiteFecha) {
+        selectableDates = remember(limiteFecha, limiteFechaMinima) {
             object : androidx.compose.material3.SelectableDates {
-                override fun isSelectableDate(utcTimeMillis: Long) = utcTimeMillis <= limiteFecha
-                override fun isSelectableYear(year: Int) = year <= hoy.year
+                override fun isSelectableDate(utcTimeMillis: Long) =
+                    utcTimeMillis in limiteFechaMinima..limiteFecha
+
+                override fun isSelectableYear(year: Int) =
+                    year in fechaMinima.year..hoy.year
             }
         }
     )

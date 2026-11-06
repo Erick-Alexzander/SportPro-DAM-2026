@@ -1,5 +1,17 @@
 package devs.grupo5.sportpro.data.model
 
+import java.time.LocalDate
+import java.time.LocalDateTime
+
+private val MONTH_NAMES = listOf(
+    "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+    "Julio", "Agosto", "Setiembre", "Octubre", "Noviembre", "Diciembre"
+)
+
+/** Período actual con el formato usado en la mensualidad: "Noviembre 2026". */
+fun currentPaymentPeriod(today: LocalDate = LocalDate.now()): String =
+    "${MONTH_NAMES[today.monthValue - 1]} ${today.year}"
+
 /**
  * Forma en que el apoderado es tratado dentro de la aplicación. Define el saludo y la etiqueta
  * que se muestran en el encabezado del módulo.
@@ -45,7 +57,7 @@ enum class PaymentStatus(val label: String) {
  * Registro de la mensualidad del periodo actual.
  */
 data class MonthlyPayment(
-    val period: String = "Nov 2024",
+    val period: String = currentPaymentPeriod(),
     val status: PaymentStatus = PaymentStatus.PENDIENTE,
     val receiptRegistered: Boolean = false
 )
@@ -57,6 +69,9 @@ data class ParentNotification(
     val id: String = "",
     val title: String = "",
     val body: String = "",
-    val time: String = "",
+    val createdAt: LocalDateTime = LocalDateTime.now(),
     val isRead: Boolean = false
-)
+) {
+    fun relativeTimeLabel(now: LocalDateTime = LocalDateTime.now()): String =
+        createdAt.relativeLabel(now)
+}

@@ -43,7 +43,7 @@ import devs.grupo5.sportpro.presentation.parent.theme.ParentTextSecondary
 
 @Composable
 fun ParentAnnouncementsScreen(
-    announcements: List<ParentAnnouncement> = parentAnnouncements,
+    announcements: List<ParentAnnouncement> = parentAnnouncements(),
     onAnnouncementClick: (ParentAnnouncement) -> Unit = {}
 ) {
     LazyColumn(
@@ -127,7 +127,7 @@ private fun AnnouncementCard(
                     )
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
-                        text = announcement.time,
+                        text = announcement.relativeTimeLabel(),
                         fontSize = 11.sp,
                         color = ParentTextMuted
                     )

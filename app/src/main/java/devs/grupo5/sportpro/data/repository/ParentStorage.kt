@@ -8,7 +8,9 @@ import devs.grupo5.sportpro.data.model.GuardianProfile
 import devs.grupo5.sportpro.data.model.GuardianTitle
 import devs.grupo5.sportpro.data.model.LinkedChild
 import devs.grupo5.sportpro.data.model.MonthlyPayment
+import devs.grupo5.sportpro.data.model.ParentNotification
 import devs.grupo5.sportpro.data.model.PaymentStatus
+import java.time.LocalDateTime
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -109,6 +111,46 @@ class ParentStorage(context: Context, val uid: String) {
         prefs.edit { putString(KEY_PAYMENT, json.toString()) }
     }
 
+    /** Notificaciones guardadas con su fecha real y estado de lectura. */
+    fun loadNotifications(): List<ParentNotification> {
+        val raw = prefs.getString(KEY_NOTIFICATIONS, null) ?: return emptyList()
+        return runCatching {
+            val array = JSONArray(raw)
+            (0 until array.length()).mapNotNull { index ->
+                array.optJSONObject(index)?.let { notificationFromJson(it) }
+            }
+        }.getOrDefault(emptyList())
+    }
+
+    fun saveNotifications(notifications: List<ParentNotification>) {
+        val array = JSONArray()
+        notifications.forEach { notification ->
+            array.put(
+                JSONObject().apply {
+                    put("id", notification.id)
+                    put("title", notification.title)
+                    put("body", notification.body)
+                    put("createdAt", notification.createdAt.toString())
+                    put("isRead", notification.isRead)
+                }
+            )
+        }
+        prefs.edit { putString(KEY_NOTIFICATIONS, array.toString()) }
+    }
+
+    private fun notificationFromJson(json: JSONObject): ParentNotification? {
+        val createdAt = runCatching {
+            LocalDateTime.parse(json.optString("createdAt"))
+        }.getOrNull() ?: LocalDateTime.now()
+        return ParentNotification(
+            id = json.optString("id"),
+            title = json.optString("title"),
+            body = json.optString("body"),
+            createdAt = createdAt,
+            isRead = json.optBoolean("isRead")
+        )
+    }
+
     private fun childFromJson(json: JSONObject): LinkedChild? {
         val stats = json.optJSONObject("stats")
         val privacyJson = json.optJSONObject("privacySettings")
@@ -186,5 +228,6 @@ class ParentStorage(context: Context, val uid: String) {
         const val KEY_CHILDREN = "children"
         const val KEY_SELECTED_CHILD = "selectedChildId"
         const val KEY_PAYMENT = "payment"
+        const val KEY_NOTIFICATIONS = "notifications"
     }
 }

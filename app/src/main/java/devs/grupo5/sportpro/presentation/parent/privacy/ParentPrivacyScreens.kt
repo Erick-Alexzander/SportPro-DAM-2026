@@ -30,8 +30,6 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -91,7 +89,7 @@ fun ChildrenPrivacyListScreen(
                 
                 item {
                     Text(
-                        text = "Seleccione un menor vinculado para gestionar sus ajustes de privacidad y datos de contacto.",
+                        text = "Seleccione un menor vinculado para gestionar sus ajustes de privacidad.",
                         color = ParentTextSecondary,
                         fontSize = 14.sp
                     )
@@ -139,7 +137,6 @@ fun ChildPrivacyDetailScreen(
     onBackClick: () -> Unit,
     onSaveClick: (LinkedChild) -> Unit
 ) {
-    var emergencyPhone by remember { mutableStateOf(child.emergencyPhone) }
     var statsVis by remember { mutableStateOf(child.privacySettings.statsVisibility) }
     var photoVis by remember { mutableStateOf(child.privacySettings.profilePhoto) }
     var nameVis by remember { mutableStateOf(child.privacySettings.fullNameVisibility) }
@@ -194,24 +191,6 @@ fun ChildPrivacyDetailScreen(
                 }
                 
                 item {
-                    Text("CONTACTO DE EMERGENCIA", color = ParentTextMuted, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    OutlinedTextField(
-                        value = emergencyPhone,
-                        onValueChange = { emergencyPhone = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = ParentWarning,
-                            unfocusedBorderColor = ParentBorder,
-                            focusedTextColor = ParentTextPrimary,
-                            unfocusedTextColor = ParentTextPrimary
-                        ),
-                        singleLine = true
-                    )
-                    Text("Solo visible para entrenadores autorizados.", color = ParentTextSecondary, fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp))
-                }
-
-                item {
                     Text("VISIBILIDAD", color = ParentTextMuted, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                 }
                 
@@ -229,7 +208,6 @@ fun ChildPrivacyDetailScreen(
                     Button(
                         onClick = {
                             val updatedChild = child.copy(
-                                emergencyPhone = emergencyPhone,
                                 privacySettings = child.privacySettings.copy(
                                     profilePhoto = photoVis,
                                     fullNameVisibility = nameVis,
