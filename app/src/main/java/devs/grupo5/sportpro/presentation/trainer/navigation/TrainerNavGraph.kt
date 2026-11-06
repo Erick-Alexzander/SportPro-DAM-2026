@@ -1,3 +1,4 @@
+
 package devs.grupo5.sportpro.presentation.trainer.navigation
 
 import androidx.compose.foundation.layout.padding
@@ -41,6 +42,7 @@ import devs.grupo5.sportpro.presentation.trainer.teams.TeamViewModel
 import devs.grupo5.sportpro.presentation.trainer.teams.TeamsScreen
 import devs.grupo5.sportpro.presentation.trainer.theme.SportProDarkBackground
 import devs.grupo5.sportpro.presentation.trainer.theme.SportProTrainerTheme
+import devs.grupo5.sportpro.presentation.trainer.training.AttendanceScreen
 import devs.grupo5.sportpro.presentation.trainer.training.CreateTrainingScreen
 import devs.grupo5.sportpro.presentation.trainer.training.TrainingDetailScreen
 import devs.grupo5.sportpro.presentation.trainer.training.TrainingViewModel
@@ -60,6 +62,9 @@ object TrainerRoutes {
     const val TRAINING = "trainer_training"
     const val CREATE_TRAINING = "create_training"
     const val TRAINING_DETAIL = "training_detail/{trainingId}"
+
+    // HU-009: Nueva ruta de asistencia
+    const val TRAINING_ATTENDANCE = "training_attendance/{trainingId}"
 
     const val MATCHES = "trainer_matches"
     const val CREATE_MATCH = "create_match"
@@ -81,20 +86,37 @@ fun TrainerMainContainerScreen(
     onLogoutSuccess: () -> Unit = {}
 ) {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
-    val currentRoute = navBackStackEntry?.destination?.route ?: TrainerRoutes.DASHBOARD
+    val currentRoute =
+        navBackStackEntry?.destination?.route ?: TrainerRoutes.DASHBOARD
 
-    // Determine current tab
     val currentTab = when {
-        currentRoute.startsWith(TrainerRoutes.TEAMS) || currentRoute.startsWith("team_detail") || currentRoute == TrainerRoutes.CREATE_TEAM -> TrainerTab.TEAMS
-        currentRoute.startsWith(TrainerRoutes.PLAYERS) || currentRoute.startsWith("player_") -> TrainerTab.TEAMS
-        currentRoute.startsWith(TrainerRoutes.TRAINING) || currentRoute.startsWith("training_") || currentRoute == TrainerRoutes.CREATE_TRAINING -> TrainerTab.TRAINING
-        currentRoute.startsWith(TrainerRoutes.MATCHES) || currentRoute.startsWith("live_match") || currentRoute.startsWith("match_detail") || currentRoute.startsWith("ai_summary") || currentRoute.startsWith("publish_community") || currentRoute == TrainerRoutes.CREATE_MATCH -> TrainerTab.MATCHES
-        currentRoute.startsWith(TrainerRoutes.COMMUNITY) || currentRoute == TrainerRoutes.CREATE_POST -> TrainerTab.COMMUNITY
+        currentRoute.startsWith(TrainerRoutes.TEAMS) ||
+                currentRoute.startsWith("team_detail") ||
+                currentRoute == TrainerRoutes.CREATE_TEAM -> TrainerTab.TEAMS
+
+        currentRoute.startsWith(TrainerRoutes.PLAYERS) ||
+                currentRoute.startsWith("player_") -> TrainerTab.TEAMS
+
+        currentRoute.startsWith(TrainerRoutes.TRAINING) ||
+                currentRoute.startsWith("training_") ||
+                currentRoute == TrainerRoutes.CREATE_TRAINING -> TrainerTab.TRAINING
+
+        currentRoute.startsWith(TrainerRoutes.MATCHES) ||
+                currentRoute.startsWith("live_match") ||
+                currentRoute.startsWith("match_detail") ||
+                currentRoute.startsWith("ai_summary") ||
+                currentRoute.startsWith("publish_community") ||
+                currentRoute == TrainerRoutes.CREATE_MATCH -> TrainerTab.MATCHES
+
+        currentRoute.startsWith(TrainerRoutes.COMMUNITY) ||
+                currentRoute == TrainerRoutes.CREATE_POST -> TrainerTab.COMMUNITY
+
         currentRoute.startsWith(TrainerRoutes.PROFILE) -> TrainerTab.PROFILE
+
         else -> TrainerTab.DASHBOARD
     }
 
-    // ViewModels shared in navigation context
+    // ViewModels compartidos entre pantallas
     val teamViewModel: TeamViewModel = viewModel()
     val playerViewModel: PlayerViewModel = viewModel()
     val trainingViewModel: TrainingViewModel = viewModel()
@@ -110,7 +132,9 @@ fun TrainerMainContainerScreen(
                     currentTab = currentTab,
                     onTabSelected = { tab ->
                         navController.navigate(tab.route) {
-                            popUpTo(TrainerRoutes.DASHBOARD) { saveState = true }
+                            popUpTo(TrainerRoutes.DASHBOARD) {
+                                saveState = true
+                            }
                             launchSingleTop = true
                             restoreState = true
                         }
@@ -123,57 +147,86 @@ fun TrainerMainContainerScreen(
                 startDestination = TrainerRoutes.DASHBOARD,
                 modifier = Modifier.padding(innerPadding)
             ) {
-                // Dashboard
+
+                // DASHBOARD
                 composable(TrainerRoutes.DASHBOARD) {
                     TrainerDashboardScreen(
                         viewModel = dashboardViewModel,
-                        onNavigateToTrainings = { navController.navigate(TrainerRoutes.TRAINING) },
-                        onNavigateToMatches = { navController.navigate(TrainerRoutes.MATCHES) },
-                        onNavigateToTeams = { navController.navigate(TrainerRoutes.TEAMS) },
-                        onNavigateToCommunity = { navController.navigate(TrainerRoutes.COMMUNITY) }
+                        onNavigateToTrainings = {
+                            navController.navigate(TrainerRoutes.TRAINING)
+                        },
+                        onNavigateToMatches = {
+                            navController.navigate(TrainerRoutes.MATCHES)
+                        },
+                        onNavigateToTeams = {
+                            navController.navigate(TrainerRoutes.TEAMS)
+                        },
+                        onNavigateToCommunity = {
+                            navController.navigate(TrainerRoutes.COMMUNITY)
+                        }
                     )
                 }
 
-                // Teams
+                // TEAMS
                 composable(TrainerRoutes.TEAMS) {
                     TeamsScreen(
                         viewModel = teamViewModel,
-                        onCreateTeamClick = { navController.navigate(TrainerRoutes.CREATE_TEAM) },
-                        onTeamClick = { teamId -> navController.navigate("team_detail/$teamId") }
+                        onCreateTeamClick = {
+                            navController.navigate(TrainerRoutes.CREATE_TEAM)
+                        },
+                        onTeamClick = { teamId ->
+                            navController.navigate("team_detail/$teamId")
+                        }
                     )
                 }
 
                 composable(TrainerRoutes.CREATE_TEAM) {
                     CreateTeamScreen(
                         viewModel = teamViewModel,
-                        onBackClick = { navController.popBackStack() },
-                        onTeamCreated = { navController.popBackStack() }
+                        onBackClick = {
+                            navController.popBackStack()
+                        },
+                        onTeamCreated = {
+                            navController.popBackStack()
+                        }
                     )
                 }
 
                 composable(
                     route = TrainerRoutes.TEAM_DETAIL,
-                    arguments = listOf(navArgument("teamId") { type = NavType.StringType })
+                    arguments = listOf(
+                        navArgument("teamId") {
+                            type = NavType.StringType
+                        }
+                    )
                 ) { backStackEntry ->
-                    val teamId = backStackEntry.arguments?.getString("teamId") ?: ""
+                    val teamId =
+                        backStackEntry.arguments?.getString("teamId") ?: ""
+
                     TeamDetailScreen(
                         teamId = teamId,
                         viewModel = teamViewModel,
-                        onBackClick = { navController.popBackStack() },
+                        onBackClick = {
+                            navController.popBackStack()
+                        },
                         onRegisterNewPlayerClick = { id ->
                             playerViewModel.startRegistrationForTeam(id)
-                            navController.navigate(TrainerRoutes.PLAYER_PERSONAL)
+                            navController.navigate(
+                                TrainerRoutes.PLAYER_PERSONAL
+                            )
                         }
                     )
                 }
 
-                // Players
+                // PLAYERS
                 composable(TrainerRoutes.PLAYERS) {
                     PlayersScreen(
                         viewModel = playerViewModel,
                         onAddPlayerClick = {
                             playerViewModel.startRegistrationForTeam(null)
-                            navController.navigate(TrainerRoutes.PLAYER_PERSONAL)
+                            navController.navigate(
+                                TrainerRoutes.PLAYER_PERSONAL
+                            )
                         }
                     )
                 }
@@ -181,73 +234,160 @@ fun TrainerMainContainerScreen(
                 composable(TrainerRoutes.PLAYER_PERSONAL) {
                     PlayerPersonalDataScreen(
                         viewModel = playerViewModel,
-                        onBackClick = { navController.popBackStack() },
-                        onContinueClick = { navController.navigate(TrainerRoutes.PLAYER_SPORT) }
+                        onBackClick = {
+                            navController.popBackStack()
+                        },
+                        onContinueClick = {
+                            navController.navigate(
+                                TrainerRoutes.PLAYER_SPORT
+                            )
+                        }
                     )
                 }
 
                 composable(TrainerRoutes.PLAYER_SPORT) {
                     PlayerSportDataScreen(
                         viewModel = playerViewModel,
-                        onBackClick = { navController.popBackStack() },
-                        onContinueClick = { navController.navigate(TrainerRoutes.PLAYER_RESPONSIBLE) }
+                        onBackClick = {
+                            navController.popBackStack()
+                        },
+                        onContinueClick = {
+                            navController.navigate(
+                                TrainerRoutes.PLAYER_RESPONSIBLE
+                            )
+                        }
                     )
                 }
 
                 composable(TrainerRoutes.PLAYER_RESPONSIBLE) {
                     PlayerResponsibleScreen(
                         viewModel = playerViewModel,
-                        onBackClick = { navController.popBackStack() },
+                        onBackClick = {
+                            navController.popBackStack()
+                        },
                         onPlayerRegistered = {
-                            val targetTeamId = playerViewModel.currentTeamIdForRegistration
-                            if (targetTeamId != null && targetTeamId.isNotBlank()) {
-                                navController.popBackStack("team_detail/$targetTeamId", inclusive = false)
+                            val targetTeamId =
+                                playerViewModel.currentTeamIdForRegistration
+
+                            if (
+                                targetTeamId != null &&
+                                targetTeamId.isNotBlank()
+                            ) {
+                                navController.popBackStack(
+                                    "team_detail/$targetTeamId",
+                                    inclusive = false
+                                )
                             } else {
-                                navController.popBackStack(TrainerRoutes.PLAYERS, inclusive = false)
+                                navController.popBackStack(
+                                    TrainerRoutes.PLAYERS,
+                                    inclusive = false
+                                )
                             }
                         }
                     )
                 }
 
-                // Trainings
+                // TRAININGS
                 composable(TrainerRoutes.TRAINING) {
                     TrainingsScreen(
                         viewModel = trainingViewModel,
-                        onCreateTrainingClick = { navController.navigate(TrainerRoutes.CREATE_TRAINING) },
-                        onTrainingClick = { trainingId -> navController.navigate("training_detail/$trainingId") }
+                        onCreateTrainingClick = {
+                            navController.navigate(
+                                TrainerRoutes.CREATE_TRAINING
+                            )
+                        },
+                        onTrainingClick = { trainingId ->
+                            navController.navigate(
+                                "training_detail/$trainingId"
+                            )
+                        }
                     )
                 }
 
                 composable(TrainerRoutes.CREATE_TRAINING) {
                     CreateTrainingScreen(
                         viewModel = trainingViewModel,
-                        onBackClick = { navController.popBackStack() },
-                        onSessionCreated = { navController.popBackStack() }
+                        onBackClick = {
+                            navController.popBackStack()
+                        },
+                        onSessionCreated = {
+                            navController.popBackStack()
+                        }
                     )
                 }
 
+                // HU-009: DETALLE DEL ENTRENAMIENTO
                 composable(
                     route = TrainerRoutes.TRAINING_DETAIL,
-                    arguments = listOf(navArgument("trainingId") { type = NavType.StringType })
+                    arguments = listOf(
+                        navArgument("trainingId") {
+                            type = NavType.StringType
+                        }
+                    )
                 ) { backStackEntry ->
-                    val trainingId = backStackEntry.arguments?.getString("trainingId") ?: ""
+
+                    val trainingId =
+                        backStackEntry.arguments?.getString("trainingId") ?: ""
+
                     TrainingDetailScreen(
                         trainingId = trainingId,
                         viewModel = trainingViewModel,
-                        onBackClick = { navController.popBackStack() }
+                        onBackClick = {
+                            navController.popBackStack()
+                        },
+                        onAttendanceClick = {
+                            navController.navigate(
+                                "training_attendance/$trainingId"
+                            )
+                        }
                     )
                 }
 
-                // Matches
+                // HU-009: PANTALLA DE ASISTENCIA
+                composable(
+                    route = TrainerRoutes.TRAINING_ATTENDANCE,
+                    arguments = listOf(
+                        navArgument("trainingId") {
+                            type = NavType.StringType
+                        }
+                    )
+                ) { backStackEntry ->
+
+                    val trainingId =
+                        backStackEntry.arguments?.getString("trainingId") ?: ""
+
+                    AttendanceScreen(
+                        trainingId = trainingId,
+                        viewModel = trainingViewModel,
+                        onBackClick = {
+                            navController.popBackStack()
+                        }
+                    )
+                }
+
+                // MATCHES
                 composable(TrainerRoutes.MATCHES) {
                     MatchesScreen(
                         viewModel = matchViewModel,
-                        onCreateMatchClick = { navController.navigate(TrainerRoutes.CREATE_MATCH) },
+                        onCreateMatchClick = {
+                            navController.navigate(
+                                TrainerRoutes.CREATE_MATCH
+                            )
+                        },
                         onMatchClick = { match ->
-                            if (match.status.equals("En vivo", ignoreCase = true)) {
-                                navController.navigate("live_match/${match.id}")
+                            if (
+                                match.status.equals(
+                                    "En vivo",
+                                    ignoreCase = true
+                                )
+                            ) {
+                                navController.navigate(
+                                    "live_match/${match.id}"
+                                )
                             } else {
-                                navController.navigate("match_detail/${match.id}")
+                                navController.navigate(
+                                    "match_detail/${match.id}"
+                                )
                             }
                         }
                     )
@@ -256,22 +396,37 @@ fun TrainerMainContainerScreen(
                 composable(TrainerRoutes.CREATE_MATCH) {
                     CreateMatchScreen(
                         viewModel = matchViewModel,
-                        onBackClick = { navController.popBackStack() },
-                        onMatchRegistered = { navController.popBackStack() }
+                        onBackClick = {
+                            navController.popBackStack()
+                        },
+                        onMatchRegistered = {
+                            navController.popBackStack()
+                        }
                     )
                 }
 
                 composable(
                     route = TrainerRoutes.LIVE_MATCH,
-                    arguments = listOf(navArgument("matchId") { type = NavType.StringType })
+                    arguments = listOf(
+                        navArgument("matchId") {
+                            type = NavType.StringType
+                        }
+                    )
                 ) { backStackEntry ->
-                    val matchId = backStackEntry.arguments?.getString("matchId") ?: ""
+
+                    val matchId =
+                        backStackEntry.arguments?.getString("matchId") ?: ""
+
                     LiveMatchScreen(
                         matchId = matchId,
                         viewModel = matchViewModel,
-                        onBackClick = { navController.popBackStack() },
+                        onBackClick = {
+                            navController.popBackStack()
+                        },
                         onFinishMatchClick = { id ->
-                            navController.navigate("match_detail/$id") {
+                            navController.navigate(
+                                "match_detail/$id"
+                            ) {
                                 popUpTo(TrainerRoutes.MATCHES)
                             }
                         }
@@ -280,93 +435,162 @@ fun TrainerMainContainerScreen(
 
                 composable(
                     route = TrainerRoutes.MATCH_DETAIL,
-                    arguments = listOf(navArgument("matchId") { type = NavType.StringType })
+                    arguments = listOf(
+                        navArgument("matchId") {
+                            type = NavType.StringType
+                        }
+                    )
                 ) { backStackEntry ->
-                    val matchId = backStackEntry.arguments?.getString("matchId") ?: ""
+
+                    val matchId =
+                        backStackEntry.arguments?.getString("matchId") ?: ""
+
                     MatchDetailScreen(
                         matchId = matchId,
                         viewModel = matchViewModel,
-                        onBackClick = { navController.popBackStack() },
+                        onBackClick = {
+                            navController.popBackStack()
+                        },
                         onAiSummaryClick = { id ->
-                            navController.navigate("ai_summary/$id")
+                            navController.navigate(
+                                "ai_summary/$id"
+                            )
                         }
                     )
                 }
 
                 composable(
                     route = TrainerRoutes.AI_SUMMARY,
-                    arguments = listOf(navArgument("matchId") { type = NavType.StringType })
+                    arguments = listOf(
+                        navArgument("matchId") {
+                            type = NavType.StringType
+                        }
+                    )
                 ) { backStackEntry ->
-                    val matchId = backStackEntry.arguments?.getString("matchId") ?: ""
+
+                    val matchId =
+                        backStackEntry.arguments?.getString("matchId") ?: ""
+
                     AiSummaryScreen(
                         matchId = matchId,
                         viewModel = matchViewModel,
-                        onBackClick = { navController.popBackStack() },
-                        onViewMatchClick = { navController.popBackStack() },
+                        onBackClick = {
+                            navController.popBackStack()
+                        },
+                        onViewMatchClick = {
+                            navController.popBackStack()
+                        },
                         onGoToMatchesClick = {
-                            navController.navigate(TrainerRoutes.MATCHES) {
+                            navController.navigate(
+                                TrainerRoutes.MATCHES
+                            ) {
                                 popUpTo(TrainerRoutes.DASHBOARD)
                             }
                         },
                         onPublishToCommunityClick = { id ->
-                            navController.navigate("publish_community/$id")
+                            navController.navigate(
+                                "publish_community/$id"
+                            )
                         }
                     )
                 }
 
                 composable(
                     route = TrainerRoutes.PUBLISH_COMMUNITY,
-                    arguments = listOf(navArgument("matchId") { type = NavType.StringType })
+                    arguments = listOf(
+                        navArgument("matchId") {
+                            type = NavType.StringType
+                        }
+                    )
                 ) { backStackEntry ->
-                    val matchId = backStackEntry.arguments?.getString("matchId") ?: ""
+
+                    val matchId =
+                        backStackEntry.arguments?.getString("matchId") ?: ""
+
                     PublishCommunityScreen(
                         matchId = matchId,
                         viewModel = matchViewModel,
-                        onBackClick = { navController.popBackStack() },
+                        onBackClick = {
+                            navController.popBackStack()
+                        },
                         onNavigateToCommunity = {
-                            navController.navigate(TrainerRoutes.COMMUNITY) {
+                            navController.navigate(
+                                TrainerRoutes.COMMUNITY
+                            ) {
                                 popUpTo(TrainerRoutes.DASHBOARD)
                             }
                         }
                     )
                 }
 
-                // Community
+                // COMMUNITY
                 composable(TrainerRoutes.COMMUNITY) {
                     CommunityScreen(
                         viewModel = communityViewModel,
-                        onCreatePostClick = { navController.navigate(TrainerRoutes.CREATE_POST) }
+                        onCreatePostClick = {
+                            navController.navigate(
+                                TrainerRoutes.CREATE_POST
+                            )
+                        }
                     )
                 }
 
                 composable(TrainerRoutes.CREATE_POST) {
                     CreatePostScreen(
                         viewModel = communityViewModel,
-                        onBackClick = { navController.popBackStack() },
-                        onPostCreated = { navController.popBackStack() }
+                        onBackClick = {
+                            navController.popBackStack()
+                        },
+                        onPostCreated = {
+                            navController.popBackStack()
+                        }
                     )
                 }
 
-                // Mi Perfil (HU-005)
+                // PROFILE (HU-005)
                 composable(TrainerRoutes.PROFILE) {
-                    val currentUser by authViewModel.currentUser.collectAsState()
-                    val trainerName = if (currentUser != null) "${currentUser?.firstName} ${currentUser?.lastName}".trim() else "Carlos Ramírez"
-                    val trainerEmail = currentUser?.email ?: "entrenador@sportpro.com"
+                    val currentUser by
+                    authViewModel.currentUser.collectAsState()
 
-                    val computedInitials = if (trainerName.isNotBlank()) {
-                        val parts = trainerName.split(" ").filter { it.isNotBlank() }
-                        if (parts.size >= 2) "${parts[0].take(1)}${parts[1].take(1)}".uppercase()
-                        else trainerName.take(2).uppercase()
-                    } else "CR"
+                    val trainerName =
+                        if (currentUser != null) {
+                            "${currentUser?.firstName} ${currentUser?.lastName}".trim()
+                        } else {
+                            "Carlos Ramírez"
+                        }
+
+                    val trainerEmail =
+                        currentUser?.email ?: "entrenador@sportpro.com"
+
+                    val computedInitials =
+                        if (trainerName.isNotBlank()) {
+                            val parts = trainerName.split(" ")
+                                .filter { it.isNotBlank() }
+
+                            if (parts.size >= 2) {
+                                "${parts[0].take(1)}${parts[1].take(1)}"
+                                    .uppercase()
+                            } else {
+                                trainerName.take(2).uppercase()
+                            }
+                        } else {
+                            "CR"
+                        }
 
                     ProfileScreen(
-                        fullName = if (trainerName.isNotBlank()) trainerName else "Carlos Ramírez",
+                        fullName = if (trainerName.isNotBlank()) {
+                            trainerName
+                        } else {
+                            "Carlos Ramírez"
+                        },
                         email = trainerEmail,
                         role = "Entrenador / DT",
                         academy = "Academia SportPro",
                         teams = "Primera • Sub-15",
                         initials = computedInitials,
-                        onBackClick = { navController.popBackStack() },
+                        onBackClick = {
+                            navController.popBackStack()
+                        },
                         onLogoutClick = onLogoutSuccess
                     )
                 }

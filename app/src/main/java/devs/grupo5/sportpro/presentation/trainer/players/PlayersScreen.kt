@@ -1,3 +1,4 @@
+
 package devs.grupo5.sportpro.presentation.trainer.players
 
 import androidx.compose.foundation.background
@@ -54,19 +55,36 @@ import devs.grupo5.sportpro.presentation.trainer.theme.SportProWarning
 @Composable
 fun PlayersScreen(
     viewModel: PlayerViewModel = viewModel(),
-    onAddPlayerClick: () -> Unit = {}
+    onAddPlayerClick: () -> Unit = {},
+    onPlayerClick: (String) -> Unit = {}
 ) {
     val players by viewModel.players.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
     val selectedCategory by viewModel.selectedCategory.collectAsState()
 
-    val categories = listOf("Todos", "Primera", "Sub-15", "Sub-10")
+    val categories = listOf(
+        "Todos",
+        "Primera",
+        "Sub-15",
+        "Sub-10"
+    )
 
     val filteredPlayers = players.filter { player ->
-        val matchesCategory = selectedCategory == "Todos" || player.category == selectedCategory
-        val matchesSearch = searchQuery.isBlank() ||
-                player.fullName.contains(searchQuery, ignoreCase = true) ||
-                player.position.contains(searchQuery, ignoreCase = true)
+        val matchesCategory =
+            selectedCategory == "Todos" ||
+                    player.category == selectedCategory
+
+        val matchesSearch =
+            searchQuery.isBlank() ||
+                    player.fullName.contains(
+                        searchQuery,
+                        ignoreCase = true
+                    ) ||
+                    player.position.contains(
+                        searchQuery,
+                        ignoreCase = true
+                    )
+
         matchesCategory && matchesSearch
     }
 
@@ -80,7 +98,8 @@ fun PlayersScreen(
                 .fillMaxSize()
                 .padding(16.dp)
         ) {
-            // Header
+
+            // CABECERA
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -93,7 +112,9 @@ fun PlayersScreen(
                         fontWeight = FontWeight.Bold,
                         color = SportProTextPrimary
                     )
+
                     Spacer(modifier = Modifier.height(4.dp))
+
                     Text(
                         text = "${filteredPlayers.size} registrados",
                         fontSize = 14.sp,
@@ -109,18 +130,34 @@ fun PlayersScreen(
                     shape = CircleShape,
                     modifier = Modifier.size(48.dp)
                 ) {
-                    Icon(imageVector = Icons.Default.Add, contentDescription = "Nuevo jugador")
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = "Nuevo jugador"
+                    )
                 }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Search Bar
+            // BUSCADOR
             OutlinedTextField(
                 value = searchQuery,
-                onValueChange = { viewModel.setSearchQuery(it) },
-                placeholder = { Text("Buscar jugador...", color = SportProTextMuted) },
-                leadingIcon = { Icon(imageVector = Icons.Default.Search, contentDescription = null, tint = SportProTextSecondary) },
+                onValueChange = {
+                    viewModel.setSearchQuery(it)
+                },
+                placeholder = {
+                    Text(
+                        text = "Buscar jugador...",
+                        color = SportProTextMuted
+                    )
+                },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Default.Search,
+                        contentDescription = null,
+                        tint = SportProTextSecondary
+                    )
+                },
                 singleLine = true,
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedContainerColor = SportProCardBackground,
@@ -136,28 +173,50 @@ fun PlayersScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Category Filter Chips
+            // FILTROS POR CATEGORÍA
             Row(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 categories.forEach { category ->
-                    val isSelected = selectedCategory == category
+
+                    val isSelected =
+                        selectedCategory == category
+
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(20.dp))
-                            .background(if (isSelected) SportProGreen else SportProCardBackground)
+                            .background(
+                                if (isSelected) {
+                                    SportProGreen
+                                } else {
+                                    SportProCardBackground
+                                }
+                            )
                             .border(
                                 1.dp,
-                                if (isSelected) SportProGreen else SportProCardBorder,
+                                if (isSelected) {
+                                    SportProGreen
+                                } else {
+                                    SportProCardBorder
+                                },
                                 RoundedCornerShape(20.dp)
                             )
-                            .clickable { viewModel.setSelectedCategory(category) }
-                            .padding(horizontal = 14.dp, vertical = 6.dp)
+                            .clickable {
+                                viewModel.setSelectedCategory(category)
+                            }
+                            .padding(
+                                horizontal = 14.dp,
+                                vertical = 6.dp
+                            )
                     ) {
                         Text(
                             text = category,
-                            color = if (isSelected) Color.Black else SportProTextPrimary,
+                            color = if (isSelected) {
+                                Color.Black
+                            } else {
+                                SportProTextPrimary
+                            },
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold
                         )
@@ -167,7 +226,7 @@ fun PlayersScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Players List
+            // LISTA DE JUGADORES
             if (filteredPlayers.isEmpty()) {
                 Box(
                     modifier = Modifier.fillMaxSize(),
@@ -183,8 +242,18 @@ fun PlayersScreen(
                 LazyColumn(
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    items(filteredPlayers, key = { it.id }) { player ->
-                        PlayerCard(player = player)
+                    items(
+                        items = filteredPlayers,
+                        key = { it.id }
+                    ) { player ->
+
+                        // HU-009: Abrir historial del jugador
+                        PlayerCard(
+                            player = player,
+                            onClick = {
+                                onPlayerClick(player.id)
+                            }
+                        )
                     }
                 }
             }
@@ -192,21 +261,36 @@ fun PlayersScreen(
     }
 }
 
+// TARJETA DE JUGADOR
 @Composable
-fun PlayerCard(player: Player) {
+fun PlayerCard(
+    player: Player,
+    onClick: () -> Unit = {}
+) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
-            .border(1.dp, SportProCardBorder, RoundedCornerShape(14.dp)),
-        colors = CardDefaults.cardColors(containerColor = SportProCardBackground)
+            .clickable(onClick = onClick)
+            .border(
+                1.dp,
+                SportProCardBorder,
+                RoundedCornerShape(14.dp)
+            ),
+        colors = CardDefaults.cardColors(
+            containerColor = SportProCardBackground
+        )
     ) {
         Row(
             modifier = Modifier.padding(14.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                modifier = Modifier.weight(1f),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+
                 Box(
                     modifier = Modifier
                         .size(44.dp)
@@ -231,7 +315,9 @@ fun PlayerCard(player: Player) {
                         fontWeight = FontWeight.Bold,
                         color = SportProTextPrimary
                     )
+
                     Spacer(modifier = Modifier.height(2.dp))
+
                     Text(
                         text = "${player.category} • Camiseta #${player.jerseyNumber} • ${player.age} años",
                         fontSize = 12.sp,
@@ -245,19 +331,37 @@ fun PlayerCard(player: Player) {
     }
 }
 
+// ESTADO DEL JUGADOR
 @Composable
 fun StatusChip(status: String) {
-    val (bgColor, textColor) = when (status.lowercase()) {
-        "activo" -> Pair(SportProGreenContainer, SportProGreen)
-        "lesionado" -> Pair(SportProWarning.copy(alpha = 0.2f), SportProWarning)
-        else -> Pair(SportProCardBorder, SportProTextMuted)
+
+    val (bgColor, textColor) = when (
+        status.lowercase()
+    ) {
+        "activo" -> Pair(
+            SportProGreenContainer,
+            SportProGreen
+        )
+
+        "lesionado" -> Pair(
+            SportProWarning.copy(alpha = 0.2f),
+            SportProWarning
+        )
+
+        else -> Pair(
+            SportProCardBorder,
+            SportProTextMuted
+        )
     }
 
     Box(
         modifier = Modifier
             .clip(RoundedCornerShape(12.dp))
             .background(bgColor)
-            .padding(horizontal = 10.dp, vertical = 4.dp)
+            .padding(
+                horizontal = 10.dp,
+                vertical = 4.dp
+            )
     ) {
         Text(
             text = status,

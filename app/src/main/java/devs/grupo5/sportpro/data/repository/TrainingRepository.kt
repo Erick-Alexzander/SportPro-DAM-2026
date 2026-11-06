@@ -1,5 +1,8 @@
+
 package devs.grupo5.sportpro.data.repository
 
+import devs.grupo5.sportpro.data.model.AttendanceRecord
+import devs.grupo5.sportpro.data.model.AttendanceStatus
 import devs.grupo5.sportpro.data.model.Exercise
 import devs.grupo5.sportpro.data.model.Training
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -8,9 +11,20 @@ import kotlinx.coroutines.flow.asStateFlow
 
 interface TrainingRepository {
     val trainings: StateFlow<List<Training>>
+
     fun getTrainingById(id: String): Training?
+
     fun addTraining(training: Training)
-    fun updateAttendance(trainingId: String, attendees: List<String>)
+
+    fun updateAttendance(
+        trainingId: String,
+        attendees: List<String>
+    )
+
+    fun updateAttendanceRecords(
+        trainingId: String,
+        records: List<AttendanceRecord>
+    )
 }
 
 class MockTrainingRepository private constructor() : TrainingRepository {
@@ -70,7 +84,9 @@ class MockTrainingRepository private constructor() : TrainingRepository {
     )
 
     private val _trainings = MutableStateFlow(initialTrainings)
-    override val trainings: StateFlow<List<Training>> = _trainings.asStateFlow()
+
+    override val trainings: StateFlow<List<Training>> =
+        _trainings.asStateFlow()
 
     override fun getTrainingById(id: String): Training? {
         return _trainings.value.find { it.id == id }
@@ -82,18 +98,60 @@ class MockTrainingRepository private constructor() : TrainingRepository {
         } else {
             training
         }
+
         _trainings.value = _trainings.value + newTraining
     }
 
-    override fun updateAttendance(trainingId: String, attendees: List<String>) {
+    // Mantiene compatibilidad con la asistencia anterior
+    override fun updateAttendance(
+        trainingId: String,
+        attendees: List<String>
+    ) {
         _trainings.value = _trainings.value.map { training ->
             if (training.id == trainingId) {
-                training.copy(attendees = attendees)
-            } else training
+                training.copy(
+                    attendees = attendees,
+                    attendanceRecords = training.attendanceRecords
+                        .filterNot { it.playerId in attendees } +
+                            attendees.map { playerId ->
+                                AttendanceRecord(
+                                    playerId = playerId,
+                                    status = AttendanceStatus.PRESENTE
+                                )
+                            }
+                )
+            } else {
+                training
+            }
+        }
+    }
+
+    // HU-009: Registro completo de asistencia
+    override fun updateAttendanceRecords(
+        trainingId: String,
+        records: List<AttendanceRecord>
+    ) {
+        val uniqueRecords = records.distinctBy { it.playerId }
+
+        val presentIds = uniqueRecords
+            .filter { it.status == AttendanceStatus.PRESENTE }
+            .map { it.playerId }
+
+        _trainings.value = _trainings.value.map { training ->
+            if (training.id == trainingId) {
+                training.copy(
+                    attendanceRecords = uniqueRecords,
+                    attendees = presentIds
+                )
+            } else {
+                training
+            }
         }
     }
 
     companion object {
-        val instance: MockTrainingRepository by lazy { MockTrainingRepository() }
+        val instance: MockTrainingRepository by lazy {
+            MockTrainingRepository()
+        }
     }
 }

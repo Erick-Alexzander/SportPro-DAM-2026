@@ -1,6 +1,9 @@
+
 package devs.grupo5.sportpro.presentation.trainer.training
 
 import androidx.lifecycle.ViewModel
+import devs.grupo5.sportpro.data.model.AttendanceRecord
+import devs.grupo5.sportpro.data.model.AttendanceStatus
 import devs.grupo5.sportpro.data.model.Exercise
 import devs.grupo5.sportpro.data.model.Player
 import devs.grupo5.sportpro.data.model.Team
@@ -57,10 +60,55 @@ class TrainingViewModel(
             exercises = exercises,
             status = "Programado"
         )
+
         trainingRepository.addTraining(newTraining)
     }
 
-    fun updateAttendance(trainingId: String, attendeeIds: List<String>) {
+    // Función original: conserva compatibilidad
+    fun updateAttendance(
+        trainingId: String,
+        attendeeIds: List<String>
+    ) {
         trainingRepository.updateAttendance(trainingId, attendeeIds)
+    }
+
+    // HU-009: Guardar los tres estados de asistencia
+    fun updateAttendanceRecords(
+        trainingId: String,
+        records: List<AttendanceRecord>
+    ) {
+        trainingRepository.updateAttendanceRecords(
+            trainingId = trainingId,
+            records = records
+        )
+    }
+
+    // HU-009: Obtener el historial de asistencia de un jugador
+    fun getPlayerAttendanceHistory(
+        playerId: String
+    ): List<Pair<Training, AttendanceStatus>> {
+        return trainings.value
+            .filter { training ->
+                training.attendanceRecords.any { it.playerId == playerId }
+            }
+            .map { training ->
+                val record = training.attendanceRecords.first {
+                    it.playerId == playerId
+                }
+                training to record.status
+            }
+    }
+
+    // HU-009: Calcular el porcentaje de asistencia registrada
+    fun getPlayerAttendancePercentage(playerId: String): Int {
+        val history = getPlayerAttendanceHistory(playerId)
+
+        if (history.isEmpty()) return 0
+
+        val presentCount = history.count {
+            it.second == AttendanceStatus.PRESENTE
+        }
+
+        return (presentCount * 100) / history.size
     }
 }
