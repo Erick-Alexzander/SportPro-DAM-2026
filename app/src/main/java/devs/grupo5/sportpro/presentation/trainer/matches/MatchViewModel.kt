@@ -1,6 +1,7 @@
 package devs.grupo5.sportpro.presentation.trainer.matches
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import devs.grupo5.sportpro.data.model.AiSummary
 import devs.grupo5.sportpro.data.model.Match
 import devs.grupo5.sportpro.data.model.MatchEvent
@@ -8,6 +9,9 @@ import devs.grupo5.sportpro.data.model.Post
 import devs.grupo5.sportpro.data.model.Team
 import devs.grupo5.sportpro.data.repository.CommunityRepository
 import devs.grupo5.sportpro.data.repository.MatchRepository
+import devs.grupo5.sportpro.data.repository.FirebaseMatchRepository
+import devs.grupo5.sportpro.data.repository.FirebasePlayerRepository
+import devs.grupo5.sportpro.data.repository.FirebaseTeamRepository
 import devs.grupo5.sportpro.data.repository.MockCommunityRepository
 import devs.grupo5.sportpro.data.repository.MockMatchRepository
 import devs.grupo5.sportpro.data.repository.MockTeamRepository
@@ -17,12 +21,13 @@ import devs.grupo5.sportpro.data.repository.TeamRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 
 class MatchViewModel(
-    private val matchRepository: MatchRepository = MockMatchRepository.instance,
-    private val teamRepository: TeamRepository = MockTeamRepository.instance,
+    private val matchRepository: MatchRepository = FirebaseMatchRepository.instance,
+    private val teamRepository: TeamRepository = FirebaseTeamRepository.instance,
     private val communityRepository: CommunityRepository = MockCommunityRepository.instance,
-    private val playerRepository: PlayerRepository = MockPlayerRepository.instance
+    private val playerRepository: PlayerRepository = FirebasePlayerRepository.instance
 ) : ViewModel() {
 
     val matches: StateFlow<List<Match>> = matchRepository.matches
@@ -38,6 +43,12 @@ class MatchViewModel(
     // Event notification feedback
     private val _eventConfirmationToast = MutableStateFlow<String?>(null)
     val eventConfirmationToast: StateFlow<String?> = _eventConfirmationToast.asStateFlow()
+
+    private val _isLoading = MutableStateFlow(false)
+    val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
+
+    private val _error = MutableStateFlow<String?>(null)
+    val error: StateFlow<String?> = _error.asStateFlow()
 
     fun setSelectedStatus(status: String) {
         _selectedStatus.value = status
@@ -59,7 +70,8 @@ class MatchViewModel(
         time: String,
         stadium: String,
         category: String,
-        isHome: Boolean
+        isHome: Boolean,
+        onResult: (Boolean) -> Unit = {}
     ) {
         val newMatch = Match(
             teamId = teamId,
@@ -69,9 +81,24 @@ class MatchViewModel(
             stadium = stadium,
             category = category,
             status = "Programado",
-            isHome = isHome
+            isHome = isHome,
+            homeScore = 0,
+            awayScore = 0,
+            currentMinute = 0
         )
-        matchRepository.addMatch(newMatch)
+
+        viewModelScope.launch {
+            _isLoading.value = true
+            _error.value = null
+            val result = matchRepository.addMatch(newMatch)
+            if (result.isSuccess) {
+                onResult(true)
+            } else {
+                _error.value = result.exceptionOrNull()?.message ?: "Error al registrar partido"
+                onResult(false)
+            }
+            _isLoading.value = false
+        }
     }
 
     fun addMatchEvent(
@@ -81,21 +108,28 @@ class MatchViewModel(
         icon: String,
         player: String,
         team: String,
-        status: String = "Local",
+        status: String = "Local", // "Local" o "Visitante"
         detail: String = ""
     ) {
         val event = MatchEvent(
+            id = "e_${java.util.UUID.randomUUID()}",
             matchId = matchId,
             minute = minute,
             eventType = eventType,
             icon = icon,
             player = player,
-            team = team,
+            team = team, // Esto DEBE SER "Local" o "Visitante" (o mapeable a uno u otro consistentemente para no romper las reglas de Firebase).
             status = status,
             detail = detail
         )
-        matchRepository.addMatchEvent(matchId, event)
-        _eventConfirmationToast.value = "Evento '$eventType' registrado exitosamente"
+        viewModelScope.launch {
+            _isLoading.value = true
+            val result = matchRepository.addMatchEvent(matchId, event)
+            if (result.isSuccess) {
+                _eventConfirmationToast.value = "Evento '$eventType' registrado exitosamente"
+            }
+            _isLoading.value = false
+        }
     }
 
     fun clearConfirmationToast() {
@@ -103,27 +137,53 @@ class MatchViewModel(
     }
 
     fun toggleMatchPause(matchId: String) {
-        matchRepository.toggleMatchPause(matchId)
+        viewModelScope.launch {
+            matchRepository.toggleMatchPause(matchId)
+        }
     }
 
     fun updateMatchMinute(matchId: String, minute: Int) {
-        matchRepository.updateMatchMinute(matchId, minute)
+        viewModelScope.launch {
+            matchRepository.updateMatchMinute(matchId, minute)
+        }
     }
 
-    fun finishMatch(matchId: String): Match? {
-        return matchRepository.finishMatch(matchId)
+    fun finishMatch(matchId: String, onResult: (Boolean) -> Unit = {}) {
+        viewModelScope.launch {
+            _isLoading.value = true
+            val result = matchRepository.finishMatch(matchId)
+            if (result.isSuccess) {
+                onResult(true)
+            } else {
+                onResult(false)
+            }
+            _isLoading.value = false
+        }
     }
 
-    fun generateAiSummary(matchId: String): AiSummary {
-        return matchRepository.generateAiSummary(matchId)
+    fun generateAiSummary(matchId: String, onResult: (Boolean) -> Unit = {}) {
+        viewModelScope.launch {
+            _isLoading.value = true
+            val result = matchRepository.generateAiSummary(matchId)
+            if (result.isSuccess) {
+                onResult(true)
+            } else {
+                onResult(false)
+            }
+            _isLoading.value = false
+        }
     }
 
     fun updateAiSummary(matchId: String, aiSummary: AiSummary) {
-        matchRepository.updateAiSummary(matchId, aiSummary)
+        viewModelScope.launch {
+            matchRepository.updateAiSummary(matchId, aiSummary)
+        }
     }
 
     fun approveAiSummary(matchId: String) {
-        matchRepository.approveAiSummary(matchId)
+        viewModelScope.launch {
+            matchRepository.approveAiSummary(matchId)
+        }
     }
 
     fun publishSummaryToCommunity(matchId: String) {

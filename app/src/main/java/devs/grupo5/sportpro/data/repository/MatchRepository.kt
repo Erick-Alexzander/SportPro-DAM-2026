@@ -9,17 +9,18 @@ import kotlinx.coroutines.flow.asStateFlow
 
 interface MatchRepository {
     val matches: StateFlow<List<Match>>
+    val syncError: StateFlow<String?>
     fun getMatchById(id: String): Match?
-    fun addMatch(match: Match)
-    fun updateMatch(match: Match)
-    fun addMatchEvent(matchId: String, event: MatchEvent): Match?
-    fun updateMatchScore(matchId: String, homeScore: Int, awayScore: Int)
-    fun toggleMatchPause(matchId: String)
-    fun updateMatchMinute(matchId: String, minute: Int)
-    fun finishMatch(matchId: String): Match?
-    fun generateAiSummary(matchId: String): AiSummary
-    fun updateAiSummary(matchId: String, aiSummary: AiSummary)
-    fun approveAiSummary(matchId: String)
+    suspend fun addMatch(match: Match): Result<Unit>
+    suspend fun updateMatch(match: Match): Result<Unit>
+    suspend fun addMatchEvent(matchId: String, event: MatchEvent): Result<Match?>
+    suspend fun updateMatchScore(matchId: String, homeScore: Int, awayScore: Int): Result<Unit>
+    suspend fun toggleMatchPause(matchId: String): Result<Unit>
+    suspend fun updateMatchMinute(matchId: String, minute: Int): Result<Unit>
+    suspend fun finishMatch(matchId: String): Result<Match?>
+    suspend fun generateAiSummary(matchId: String): Result<AiSummary>
+    suspend fun updateAiSummary(matchId: String, aiSummary: AiSummary): Result<Unit>
+    suspend fun approveAiSummary(matchId: String): Result<Unit>
 }
 
 class MockMatchRepository private constructor() : MatchRepository {
@@ -208,26 +209,31 @@ class MockMatchRepository private constructor() : MatchRepository {
     private val _matches = MutableStateFlow(initialMatches)
     override val matches: StateFlow<List<Match>> = _matches.asStateFlow()
 
+    private val _syncError = MutableStateFlow<String?>(null)
+    override val syncError: StateFlow<String?> = _syncError.asStateFlow()
+
     override fun getMatchById(id: String): Match? {
         return _matches.value.find { it.id == id }
     }
 
-    override fun addMatch(match: Match) {
+    override suspend fun addMatch(match: Match): Result<Unit> {
         val newMatch = if (match.id.isEmpty()) {
             match.copy(id = "m_${System.currentTimeMillis()}")
         } else {
             match
         }
         _matches.value = _matches.value + newMatch
+        return Result.success(Unit)
     }
 
-    override fun updateMatch(match: Match) {
+    override suspend fun updateMatch(match: Match): Result<Unit> {
         _matches.value = _matches.value.map {
             if (it.id == match.id) match else it
         }
+        return Result.success(Unit)
     }
 
-    override fun addMatchEvent(matchId: String, event: MatchEvent): Match? {
+    override suspend fun addMatchEvent(matchId: String, event: MatchEvent): Result<Match?> {
         var updatedMatch: Match? = null
         _matches.value = _matches.value.map { match ->
             if (match.id == matchId) {
@@ -254,28 +260,31 @@ class MockMatchRepository private constructor() : MatchRepository {
                 m
             } else match
         }
-        return updatedMatch
+        return Result.success(updatedMatch)
     }
 
-    override fun updateMatchScore(matchId: String, homeScore: Int, awayScore: Int) {
+    override suspend fun updateMatchScore(matchId: String, homeScore: Int, awayScore: Int): Result<Unit> {
         _matches.value = _matches.value.map { match ->
             if (match.id == matchId) match.copy(homeScore = homeScore, awayScore = awayScore) else match
         }
+        return Result.success(Unit)
     }
 
-    override fun toggleMatchPause(matchId: String) {
+    override suspend fun toggleMatchPause(matchId: String): Result<Unit> {
         _matches.value = _matches.value.map { match ->
             if (match.id == matchId) match.copy(isPaused = !match.isPaused) else match
         }
+        return Result.success(Unit)
     }
 
-    override fun updateMatchMinute(matchId: String, minute: Int) {
+    override suspend fun updateMatchMinute(matchId: String, minute: Int): Result<Unit> {
         _matches.value = _matches.value.map { match ->
             if (match.id == matchId) match.copy(currentMinute = minute) else match
         }
+        return Result.success(Unit)
     }
 
-    override fun finishMatch(matchId: String): Match? {
+    override suspend fun finishMatch(matchId: String): Result<Match?> {
         var updated: Match? = null
         _matches.value = _matches.value.map { match ->
             if (match.id == matchId) {
@@ -284,10 +293,10 @@ class MockMatchRepository private constructor() : MatchRepository {
                 m
             } else match
         }
-        return updated
+        return Result.success(updated)
     }
 
-    override fun generateAiSummary(matchId: String): AiSummary {
+    override suspend fun generateAiSummary(matchId: String): Result<AiSummary> {
         val match = getMatchById(matchId)
         val homeTeam = if (match?.isHome == true) "SportPro" else match?.rival ?: "Local"
         val awayTeam = if (match?.isHome == true) match.rival else "SportPro"
@@ -302,7 +311,7 @@ class MockMatchRepository private constructor() : MatchRepository {
                 isApproved = false
             )
             updateAiSummary(matchId, emptySummary)
-            return emptySummary
+            return Result.success(emptySummary)
         }
 
         val validEvents = match.events.filter { !it.status.equals("Anulado", ignoreCase = true) }
@@ -370,22 +379,26 @@ class MockMatchRepository private constructor() : MatchRepository {
         )
 
         updateAiSummary(matchId, generated)
-        return generated
+        return Result.success(generated)
     }
 
-    override fun updateAiSummary(matchId: String, aiSummary: AiSummary) {
+    override suspend fun updateAiSummary(matchId: String, aiSummary: AiSummary): Result<Unit> {
         _matches.value = _matches.value.map { match ->
             if (match.id == matchId) match.copy(aiSummary = aiSummary) else match
         }
+        return Result.success(Unit)
     }
 
-    override fun approveAiSummary(matchId: String) {
+    override suspend fun approveAiSummary(matchId: String): Result<Unit> {
         _matches.value = _matches.value.map { match ->
             if (match.id == matchId) {
-                val currentSummary = match.aiSummary ?: generateAiSummary(matchId)
-                match.copy(aiSummary = currentSummary.copy(isApproved = true))
+                val currentSummary = match.aiSummary ?: generateAiSummary(matchId).getOrNull()
+                if (currentSummary != null) {
+                    match.copy(aiSummary = currentSummary.copy(isApproved = true))
+                } else match
             } else match
         }
+        return Result.success(Unit)
     }
 
     companion object {

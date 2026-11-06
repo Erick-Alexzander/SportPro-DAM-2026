@@ -204,5 +204,89 @@ service cloud.firestore {
 
       allow delete: if false;
     }
+
+    // --- REGLAS PARA PARTIDOS ---
+
+    match /matches/{matchId} {
+      allow get, list: if isOwner(resource.data);
+
+      allow create: if isTrainer()
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.id == matchId
+        && request.resource.data.keys().hasAll([
+          'id', 'ownerUid', 'teamId', 'rival', 'date', 'time', 'stadium', 'category', 'status', 'isHome', 'homeScore', 'awayScore', 'currentMinute', 'isPaused', 'events'
+        ])
+        && request.resource.data.keys().hasOnly([
+          'id', 'ownerUid', 'teamId', 'rival', 'date', 'time', 'stadium', 'category', 'status', 'isHome', 'homeScore', 'awayScore', 'currentMinute', 'isPaused', 'events', 'aiSummary'
+        ])
+        && request.resource.data.status == 'Programado'
+        && request.resource.data.events == []
+        && request.resource.data.homeScore == 0
+        && request.resource.data.awayScore == 0
+        && request.resource.data.currentMinute == 0
+        && request.resource.data.isPaused == false
+        && getAfter(/databases/$(database)/documents/teams/$(request.resource.data.teamId)).data.ownerUid == request.auth.uid;
+
+      allow update: if isOwner(resource.data)
+        && isImmutable('id')
+        && isImmutable('ownerUid')
+        && isImmutable('teamId')
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'rival', 'date', 'time', 'stadium', 'category', 'status', 'isHome', 'homeScore', 'awayScore', 'currentMinute', 'isPaused', 'events', 'aiSummary'
+        ])
+        && request.resource.data.status in ['Programado', 'En vivo', 'Finalizado']
+        && (
+             (resource.data.status == 'Programado' && request.resource.data.status in ['Programado', 'En vivo']) ||
+             (resource.data.status == 'En vivo' && request.resource.data.status in ['En vivo', 'Finalizado']) ||
+             (resource.data.status == 'Finalizado' && request.resource.data.status == 'Finalizado')
+        )
+        && (
+            resource.data.status != 'Finalizado' ||
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['aiSummary'])
+        )
+        && (
+            isImmutable('events') ||
+            (
+                request.resource.data.events is list &&
+                request.resource.data.events.size() == resource.data.events.size() + 1 &&
+                request.resource.data.events.hasAll(resource.data.events) &&
+                request.resource.data.events[request.resource.data.events.size() - 1].keys().hasAll(['id', 'matchId', 'minute', 'eventType', 'icon', 'player', 'team', 'status', 'detail']) &&
+                request.resource.data.events[request.resource.data.events.size() - 1].eventType in ['Gol', 'T. Amarilla', 'T. Roja', 'Cambio', 'Córner', 'Falta', 'Penal', 'Fuera de juego'] &&
+                request.resource.data.events[request.resource.data.events.size() - 1].team in ['Local', 'Visitante'] &&
+                resource.data.status == 'En vivo'
+            )
+        )
+        && (
+            isImmutable('isHome') || request.resource.data.status == 'Programado'
+        )
+        && (
+            isImmutable('currentMinute') || (request.resource.data.currentMinute is int && request.resource.data.currentMinute >= 0)
+        )
+        && (
+            (isImmutable('events') && isImmutable('homeScore') && isImmutable('awayScore')) ||
+            (
+                !isImmutable('events') &&
+                request.resource.data.events[request.resource.data.events.size() - 1].eventType != 'Gol' &&
+                isImmutable('homeScore') &&
+                isImmutable('awayScore')
+            ) ||
+            (
+                !isImmutable('events') &&
+                request.resource.data.events[request.resource.data.events.size() - 1].eventType == 'Gol' &&
+                request.resource.data.events[request.resource.data.events.size() - 1].team == 'Local' &&
+                request.resource.data.homeScore == (resource.data.homeScore + 1) &&
+                isImmutable('awayScore')
+            ) ||
+            (
+                !isImmutable('events') &&
+                request.resource.data.events[request.resource.data.events.size() - 1].eventType == 'Gol' &&
+                request.resource.data.events[request.resource.data.events.size() - 1].team == 'Visitante' &&
+                request.resource.data.awayScore == (resource.data.awayScore + 1) &&
+                isImmutable('homeScore')
+            )
+        );
+
+      allow delete: if false;
+    }
   }
 }

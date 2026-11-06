@@ -476,9 +476,12 @@ fun LiveMatchScreen(
             item {
                 Button(
                     onClick = {
-                        val finished = viewModel.finishMatch(match.id)
-                        if (finished != null) {
-                            onFinishMatchClick(finished.id)
+                        viewModel.finishMatch(match.id) { success ->
+                            if (success) {
+                                onFinishMatchClick(match.id)
+                            } else {
+                                scope.launch { snackbarHostState.showSnackbar("Error al finalizar partido") }
+                            }
                         }
                     },
                     modifier = Modifier
@@ -503,6 +506,7 @@ fun LiveMatchScreen(
 
         // Modal BottomSheet for Register Event
         activeModalEvent?.let { opt ->
+            val localTeamNameStr = if (match.isHome) "SportPro (Local)" else "${match.rival} (Local)"
             RegisterEventBottomSheet(
                 eventOption = opt,
                 match = match,
@@ -520,7 +524,7 @@ fun LiveMatchScreen(
                         eventType = opt.type,
                         icon = opt.icon,
                         player = player,
-                        team = team,
+                        team = if (team == localTeamNameStr) "Local" else "Visitante",
                         status = status,
                         detail = detail
                     )
