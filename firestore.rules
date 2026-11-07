@@ -14,6 +14,12 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "TRAINER";
     }
 
+    function isPlayer() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "PLAYER";
+    }
+
     function isOwner(data) {
       return signedIn() && data.ownerUid == request.auth.uid;
     }
@@ -312,6 +318,104 @@ service cloud.firestore {
         );
 
       allow delete: if false;
+    }
+
+    // --- REGLAS PARA VINCULACIÓN DE CUENTAS ---
+
+    match /linkInvitations/{inviteId} {
+      allow get: if signedIn();
+      allow list: if signedIn() && resource.data.trainerUid == request.auth.uid;
+
+      allow create: if isTrainer()
+        && request.resource.data.keys().hasAll(['inviteId', 'playerId', 'trainerUid', 'createdAt', 'expiresAt', 'status'])
+        && request.resource.data.keys().hasOnly(['inviteId', 'playerId', 'trainerUid', 'createdAt', 'expiresAt', 'status'])
+        && request.resource.data.inviteId == inviteId
+        && request.resource.data.trainerUid == request.auth.uid
+        && request.resource.data.status == 'PENDING'
+        && get(/databases/$(database)/documents/players/$(request.resource.data.playerId)).data.ownerUid == request.auth.uid
+        && !exists(/databases/$(database)/documents/playerAccountLinks/$(request.resource.data.playerId))
+        && request.resource.data.expiresAt > request.time.toMillis()
+        && request.resource.data.expiresAt <= request.time.toMillis() + (24 * 60 * 60 * 1000);
+
+      allow update: if isTrainer()
+        && resource.data.trainerUid == request.auth.uid
+        && isImmutable('inviteId')
+        && isImmutable('playerId')
+        && isImmutable('trainerUid')
+        && isImmutable('createdAt')
+        && isImmutable('expiresAt')
+        && request.resource.data.status == 'CONSUMED'
+        && resource.data.status == 'PENDING'
+        && getAfter(/databases/$(database)/documents/linkInvitations/$(inviteId)/claims/$(getAfter(/databases/$(database)/documents/playerAccountLinks/$(resource.data.playerId)).data.userUid)).data.status == 'APPROVED';
+
+      allow delete: if false;
+
+      match /claims/{userUid} {
+        allow get: if signedIn() && (userUid == request.auth.uid || get(/databases/$(database)/documents/linkInvitations/$(inviteId)).data.trainerUid == request.auth.uid);
+        allow list: if signedIn() && get(/databases/$(database)/documents/linkInvitations/$(inviteId)).data.trainerUid == request.auth.uid;
+
+        allow create: if isPlayer()
+          && userUid == request.auth.uid
+          && request.resource.data.keys().hasAll(['userUid', 'inviteId', 'createdAt', 'status'])
+          && request.resource.data.keys().hasOnly(['userUid', 'inviteId', 'createdAt', 'status'])
+          && request.resource.data.userUid == request.auth.uid
+          && request.resource.data.inviteId == inviteId
+          && request.resource.data.status == 'PENDING'
+          && get(/databases/$(database)/documents/linkInvitations/$(inviteId)).data.status == 'PENDING'
+          && get(/databases/$(database)/documents/linkInvitations/$(inviteId)).data.expiresAt > request.time.toMillis()
+          && !exists(/databases/$(database)/documents/userPlayerLinks/$(request.auth.uid));
+
+        allow update: if isTrainer()
+          && get(/databases/$(database)/documents/linkInvitations/$(inviteId)).data.trainerUid == request.auth.uid
+          && isImmutable('userUid')
+          && isImmutable('inviteId')
+          && isImmutable('createdAt')
+          && request.resource.data.status == 'APPROVED'
+          && resource.data.status == 'PENDING'
+          && getAfter(/databases/$(database)/documents/linkInvitations/$(inviteId)).data.status == 'CONSUMED';
+
+        allow delete: if false;
+      }
+    }
+
+    match /playerAccountLinks/{playerId} {
+      allow get: if signedIn() && (
+        (resource != null && (resource.data.trainerUid == request.auth.uid || resource.data.userUid == request.auth.uid)) ||
+        (resource == null && get(/databases/$(database)/documents/players/$(playerId)).data.ownerUid == request.auth.uid)
+      );
+      allow list: if false;
+      allow create: if isTrainer()
+        && request.resource.data.keys().hasAll(['playerId', 'userUid', 'trainerUid', 'inviteId', 'linkedAt'])
+        && request.resource.data.keys().hasOnly(['playerId', 'userUid', 'trainerUid', 'inviteId', 'linkedAt'])
+        && request.resource.data.playerId == playerId
+        && request.resource.data.trainerUid == request.auth.uid
+        && get(/databases/$(database)/documents/players/$(playerId)).data.ownerUid == request.auth.uid
+        && get(/databases/$(database)/documents/users/$(request.resource.data.userUid)).data.role == 'PLAYER'
+        && !exists(/databases/$(database)/documents/userPlayerLinks/$(request.resource.data.userUid))
+        && !exists(/databases/$(database)/documents/playerAccountLinks/$(playerId))
+        && request.resource.data.linkedAt == request.time
+        && getAfter(/databases/$(database)/documents/userPlayerLinks/$(request.resource.data.userUid)).data.playerId == playerId
+        && getAfter(/databases/$(database)/documents/linkInvitations/$(request.resource.data.inviteId)).data.status == 'CONSUMED'
+        && getAfter(/databases/$(database)/documents/linkInvitations/$(request.resource.data.inviteId)/claims/$(request.resource.data.userUid)).data.status == 'APPROVED';
+
+      allow update, delete: if false;
+    }
+
+    match /userPlayerLinks/{userUid} {
+      allow get: if signedIn() && (userUid == request.auth.uid || (resource != null && resource.data.trainerUid == request.auth.uid));
+      allow list: if false;
+      allow create: if isTrainer()
+        && request.resource.data.keys().hasAll(['playerId', 'userUid', 'trainerUid', 'inviteId', 'linkedAt'])
+        && request.resource.data.keys().hasOnly(['playerId', 'userUid', 'trainerUid', 'inviteId', 'linkedAt'])
+        && request.resource.data.userUid == userUid
+        && request.resource.data.trainerUid == request.auth.uid
+        && !exists(/databases/$(database)/documents/userPlayerLinks/$(userUid))
+        && request.resource.data.linkedAt == request.time
+        && getAfter(/databases/$(database)/documents/playerAccountLinks/$(request.resource.data.playerId)).data.userUid == userUid
+        && getAfter(/databases/$(database)/documents/linkInvitations/$(request.resource.data.inviteId)).data.status == 'CONSUMED'
+        && getAfter(/databases/$(database)/documents/linkInvitations/$(request.resource.data.inviteId)/claims/$(request.resource.data.userUid)).data.status == 'APPROVED';
+
+      allow update, delete: if false;
     }
   }
 }

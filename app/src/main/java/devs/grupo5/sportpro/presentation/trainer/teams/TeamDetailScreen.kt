@@ -20,15 +20,18 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PersonAdd
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Tab
@@ -38,6 +41,7 @@ import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -51,6 +55,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import devs.grupo5.sportpro.data.model.Player
+import devs.grupo5.sportpro.presentation.trainer.players.link.LinkPlayerDialog
+import devs.grupo5.sportpro.presentation.trainer.players.link.PendingClaimsDialog
+import devs.grupo5.sportpro.presentation.trainer.players.link.PlayerLinkStatus
+import devs.grupo5.sportpro.presentation.trainer.players.link.PlayerLinkViewModel
 import devs.grupo5.sportpro.presentation.trainer.theme.SportProCardBackground
 import devs.grupo5.sportpro.presentation.trainer.theme.SportProCardBorder
 import devs.grupo5.sportpro.presentation.trainer.theme.SportProDarkBackground
@@ -75,6 +84,8 @@ fun TeamDetailScreen(
 
     var selectedTabIndex by remember { mutableStateOf(0) }
     var showAddPlayerDialog by remember { mutableStateOf(false) }
+    var showPendingClaimsDialog by remember { mutableStateOf(false) }
+    var playerToLink by remember { mutableStateOf<Player?>(null) }
 
     val tabs = listOf("Jugadores", "Entrenamientos", "Partidos")
 
@@ -93,6 +104,15 @@ fun TeamDetailScreen(
     val teamPlayers = viewModel.getTeamPlayers(team)
     val teamTrainings = viewModel.getTeamTrainings(team.id)
     val teamMatches = viewModel.getTeamMatches(team.id)
+
+    val playerLinkViewModel: PlayerLinkViewModel = viewModel()
+    val linkStatuses by playerLinkViewModel.playerLinkStatuses.collectAsState()
+
+    LaunchedEffect(teamPlayers) {
+        if (teamPlayers.isNotEmpty()) {
+            playerLinkViewModel.checkPlayersLinkStatus(teamPlayers.map { it.id })
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -225,14 +245,28 @@ fun TeamDetailScreen(
                         color = SportProTextPrimary
                     )
 
-                    Button(
-                        onClick = { showAddPlayerDialog = true },
-                        colors = ButtonDefaults.buttonColors(containerColor = SportProGreen, contentColor = Color.Black),
-                        shape = RoundedCornerShape(20.dp)
-                    ) {
-                        Icon(imageVector = Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("+ Agregar jugador", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(
+                            onClick = { showPendingClaimsDialog = true },
+                            colors = ButtonDefaults.buttonColors(containerColor = SportProCardBorder, contentColor = SportProTextPrimary),
+                            shape = RoundedCornerShape(20.dp),
+                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp),
+                            modifier = Modifier.height(36.dp)
+                        ) {
+                            Text("Solicitudes", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
+
+                        Button(
+                            onClick = { showAddPlayerDialog = true },
+                            colors = ButtonDefaults.buttonColors(containerColor = SportProGreen, contentColor = Color.Black),
+                            shape = RoundedCornerShape(20.dp),
+                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp),
+                            modifier = Modifier.height(36.dp)
+                        ) {
+                            Icon(imageVector = Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("+ Agregar", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
 
@@ -286,14 +320,71 @@ fun TeamDetailScreen(
                                     }
                                 }
 
-                                IconButton(
-                                    onClick = { viewModel.removePlayerFromTeam(team.id, player.id) }
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Delete,
-                                        contentDescription = "Remover",
-                                        tint = SportProError.copy(alpha = 0.8f)
-                                    )
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    val status = linkStatuses[player.id] ?: PlayerLinkStatus.Unlinked
+                                    when (status) {
+                                        is PlayerLinkStatus.Loading -> {
+                                            CircularProgressIndicator(
+                                                modifier = Modifier.size(24.dp),
+                                                color = SportProGreen,
+                                                strokeWidth = 2.dp
+                                            )
+                                        }
+                                        is PlayerLinkStatus.Linked -> {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Check,
+                                                    contentDescription = null,
+                                                    tint = SportProGreen,
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                                Spacer(modifier = Modifier.width(4.dp))
+                                                Text(
+                                                    text = "Vinculado",
+                                                    fontSize = 12.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = SportProGreen
+                                                )
+                                            }
+                                        }
+                                        is PlayerLinkStatus.Unlinked -> {
+                                            Button(
+                                                onClick = { playerToLink = player },
+                                                shape = RoundedCornerShape(8.dp),
+                                                modifier = Modifier.height(32.dp),
+                                                colors = ButtonDefaults.buttonColors(
+                                                    containerColor = SportProCardBorder,
+                                                    contentColor = SportProTextPrimary
+                                                ),
+                                                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp)
+                                            ) {
+                                                Text("Vincular", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                            }
+                                        }
+                                        is PlayerLinkStatus.Error -> {
+                                            IconButton(
+                                                onClick = { playerLinkViewModel.checkPlayersLinkStatus(listOf(player.id)) },
+                                                modifier = Modifier.size(32.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Refresh,
+                                                    contentDescription = "Reintentar",
+                                                    tint = SportProError
+                                                )
+                                            }
+                                        }
+                                    }
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    IconButton(
+                                        onClick = { viewModel.removePlayerFromTeam(team.id, player.id) },
+                                        modifier = Modifier.size(32.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Delete,
+                                            contentDescription = "Remover",
+                                            tint = SportProError.copy(alpha = 0.8f)
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -495,6 +586,25 @@ fun TeamDetailScreen(
                 TextButton(onClick = { showAddPlayerDialog = false }) {
                     Text("Cerrar", color = SportProGreen, fontWeight = FontWeight.Bold)
                 }
+            }
+        )
+    }
+
+    // Modal de Vinculación de Cuentas (PIN)
+    playerToLink?.let { player ->
+        LinkPlayerDialog(
+            player = player,
+            onDismiss = { playerToLink = null }
+        )
+    }
+
+    // Modal de Solicitudes Pendientes para el Equipo
+    if (showPendingClaimsDialog) {
+        PendingClaimsDialog(
+            teamPlayers = teamPlayers,
+            onDismiss = {
+                showPendingClaimsDialog = false
+                playerLinkViewModel.checkPlayersLinkStatus(teamPlayers.map { it.id })
             }
         )
     }
