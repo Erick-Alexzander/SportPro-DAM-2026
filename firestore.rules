@@ -37,7 +37,7 @@ service cloud.firestore {
         ])
         && request.resource.data.keys().hasOnly([
           'uid', 'email', 'firstName', 'lastName',
-          'role', 'birthDate'
+          'role', 'birthDate', 'playerProfile'
         ])
         && request.resource.data.uid == userId
         && request.resource.data.email is string
@@ -45,14 +45,39 @@ service cloud.firestore {
         && request.resource.data.lastName is string
         && request.resource.data.role in [
           'TRAINER', 'PLAYER', 'PARENT'
-        ];
+        ]
+        && (
+          !('playerProfile' in request.resource.data) ||
+          (
+            request.resource.data.playerProfile is map
+            && request.resource.data.playerProfile.keys().hasOnly([
+              'position', 'jerseyNumber', 'category', 'dominantFoot', 'status', 'teamName',
+              'heightCm', 'weightKg', 'size', 'stats', 'attributes', 'privacySettings'
+            ])
+            && request.resource.data.role == 'PLAYER'
+          )
+        );
 
       allow update: if signedIn()
         && request.auth.uid == userId
+        && isImmutable('uid')
+        && isImmutable('role')
+        && isImmutable('email')
         && request.resource.data.diff(resource.data)
           .affectedKeys().hasOnly([
-            'firstName', 'lastName', 'birthDate'
-          ]);
+            'firstName', 'lastName', 'birthDate', 'playerProfile'
+          ])
+        && (
+          !('playerProfile' in request.resource.data.diff(resource.data).affectedKeys()) ||
+          (
+            request.resource.data.playerProfile is map
+            && request.resource.data.playerProfile.keys().hasOnly([
+              'position', 'jerseyNumber', 'category', 'dominantFoot', 'status', 'teamName',
+              'heightCm', 'weightKg', 'size', 'stats', 'attributes', 'privacySettings'
+            ])
+            && resource.data.role == 'PLAYER'
+          )
+        );
 
       allow delete: if false;
     }
