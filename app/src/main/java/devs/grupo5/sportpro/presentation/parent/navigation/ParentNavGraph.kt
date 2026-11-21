@@ -8,6 +8,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -19,6 +20,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import devs.grupo5.sportpro.data.model.UserRole
+import devs.grupo5.sportpro.data.repository.FirebasePaymentRepository
 import devs.grupo5.sportpro.data.repository.MockParentRepository
 import devs.grupo5.sportpro.data.repository.ParentRepository
 import devs.grupo5.sportpro.presentation.auth.AuthViewModel
@@ -40,6 +42,7 @@ import devs.grupo5.sportpro.presentation.parent.dialogs.SimpleInfoDialog
 import devs.grupo5.sportpro.presentation.parent.profile.ParentProfileScreen
 import devs.grupo5.sportpro.presentation.parent.theme.ParentBackground
 import devs.grupo5.sportpro.presentation.parent.theme.SportProParentTheme
+import kotlinx.coroutines.launch
 
 object ParentRoutes {
     const val HOME = "parent_home"
@@ -70,7 +73,11 @@ fun ParentMainContainerScreen(
     val selectedChildId by parentRepository.selectedChildId.collectAsState()
     val selectedChild = linkedChildren.firstOrNull { it.id == selectedChildId }
         ?: linkedChildren.firstOrNull()
-    val payment by parentRepository.payment.collectAsState()
+    val paymentRepository = remember { FirebasePaymentRepository.getInstance() }
+    val receiptScope = rememberCoroutineScope()
+    val guardianUid = currentUser?.uid.orEmpty()
+    val paymentFlow = remember(guardianUid) { paymentRepository.observePayment(guardianUid) }
+    val payment by paymentFlow.collectAsState()
     val notifications by parentRepository.notifications.collectAsState()
 
     var showChildDialog by rememberSaveable { mutableStateOf(false) }
@@ -292,8 +299,11 @@ fun ParentMainContainerScreen(
         PaymentStatusDialog(
             payment = payment,
             onDismiss = { showPaymentDialog = false },
-            onStatusChange = { status -> parentRepository.updatePaymentStatus(status) },
-            onUploadReceipt = { parentRepository.registerReceipt() }
+            onUploadReceipt = {
+                receiptScope.launch {
+                    paymentRepository.submitReceipt(guardianUid)
+                }
+            }
         )
     }
 

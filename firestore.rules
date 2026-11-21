@@ -20,6 +20,12 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "PLAYER";
     }
 
+    function isAdmin() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "ADMIN";
+    }
+
     function isOwner(data) {
       return signedIn() && data.ownerUid == request.auth.uid;
     }
@@ -34,7 +40,7 @@ service cloud.firestore {
       allow get: if signedIn()
         && request.auth.uid == userId;
 
-      allow list: if false;
+      allow list: if isAdmin();
 
       allow create: if signedIn()
         && request.auth.uid == userId
@@ -416,6 +422,33 @@ service cloud.firestore {
         && getAfter(/databases/$(database)/documents/linkInvitations/$(request.resource.data.inviteId)/claims/$(request.resource.data.userUid)).data.status == 'APPROVED';
 
       allow update, delete: if false;
+    }
+
+    match /payments/{guardianUid} {
+      function isGuardianOwner() {
+        return signedIn() && request.auth.uid == guardianUid;
+      }
+
+      allow get: if isGuardianOwner() || isAdmin();
+      allow list: if isAdmin();
+
+      allow create: if (isGuardianOwner()
+        && request.resource.data.keys().hasOnly(['period', 'status', 'receiptRegistered'])
+        && request.resource.data.status == 'PENDIENTE'
+        && request.resource.data.receiptRegistered == true)
+        || (isAdmin()
+        && request.resource.data.keys().hasOnly(['period', 'status', 'updatedBy', 'updatedAt'])
+        && request.resource.data.status in ['PENDIENTE', 'PAGADO']);
+
+      allow update: if (isGuardianOwner()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['receiptRegistered'])
+        && isImmutable('status')
+        && isImmutable('period'))
+        || (isAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['period', 'status', 'updatedBy', 'updatedAt'])
+        && request.resource.data.status in ['PENDIENTE', 'PAGADO']);
+
+      allow delete: if false;
     }
   }
 }

@@ -52,7 +52,6 @@ import devs.grupo5.sportpro.data.model.LinkedChild
 import devs.grupo5.sportpro.data.model.MonthlyPayment
 import devs.grupo5.sportpro.data.model.ParentNotification
 import devs.grupo5.sportpro.data.model.MINOR_MAX_AGE
-import devs.grupo5.sportpro.data.model.PaymentStatus
 import devs.grupo5.sportpro.data.model.ageInYears
 import devs.grupo5.sportpro.data.model.formatPeruvianMobile
 import devs.grupo5.sportpro.data.model.isValidMinorBirthDate
@@ -546,7 +545,6 @@ fun NotificationsDialog(
 fun PaymentStatusDialog(
     payment: MonthlyPayment,
     onDismiss: () -> Unit = {},
-    onStatusChange: (PaymentStatus) -> Unit = {},
     onUploadReceipt: () -> Unit = {}
 ) {
     AlertDialog(
@@ -598,28 +596,11 @@ fun PaymentStatusDialog(
                 )
 
                 Text(
-                    text = "Actualiza el estado según el comprobante que presentaste en la academia.",
+                    text = "El estado lo actualiza la academia cuando valida tu comprobante.",
                     fontSize = 12.sp,
                     color = ParentTextSecondary,
                     lineHeight = 17.sp
                 )
-
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    PaymentChoiceButton(
-                        label = "Pagado",
-                        selected = payment.status == PaymentStatus.PAGADO,
-                        selectedColor = ParentEmerald,
-                        onClick = { onStatusChange(PaymentStatus.PAGADO) },
-                        modifier = Modifier.weight(1f)
-                    )
-                    PaymentChoiceButton(
-                        label = "Pendiente",
-                        selected = payment.status == PaymentStatus.PENDIENTE,
-                        selectedColor = ParentWarning,
-                        onClick = { onStatusChange(PaymentStatus.PENDIENTE) },
-                        modifier = Modifier.weight(1f)
-                    )
-                }
 
                 Button(
                     onClick = onUploadReceipt,
@@ -637,7 +618,7 @@ fun PaymentStatusDialog(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = if (payment.receiptRegistered) "Comprobante registrado" else "Registrar comprobante",
+                        text = if (payment.receiptRegistered) "Comprobante enviado" else "Enviar comprobante",
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold
                     )
@@ -1107,36 +1088,6 @@ fun CreateChildAccessDialog(
             }
         }
     )
-}
-
-@Composable
-private fun PaymentChoiceButton(
-    label: String,
-    selected: Boolean,
-    selectedColor: Color,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(12.dp))
-            .background(if (selected) selectedColor.copy(alpha = 0.15f) else ParentSurfaceVariant)
-            .border(
-                width = if (selected) 1.5.dp else 1.dp,
-                color = if (selected) selectedColor else ParentBorder,
-                shape = RoundedCornerShape(12.dp)
-            )
-            .clickable { onClick() }
-            .padding(vertical = 12.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = label,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.Bold,
-            color = if (selected) selectedColor else ParentTextSecondary
-        )
-    }
 }
 
 @Composable

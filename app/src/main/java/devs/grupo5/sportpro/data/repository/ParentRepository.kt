@@ -47,11 +47,6 @@ interface ParentRepository {
     /** Cambia el menor visible en el módulo. */
     fun selectChild(childId: String)
 
-    fun updatePaymentStatus(status: PaymentStatus)
-
-    /** Registra el comprobante de pago enviado por el apoderado. */
-    fun registerReceipt()
-
     fun markNotificationsAsRead()
 
     /** Limpia el estado en memoria al cerrar sesión sin borrar la persistencia por uid. */
@@ -223,16 +218,6 @@ class MockParentRepository private constructor(
     private fun persistChildren() {
         storage?.saveChildren(_linkedChildren.value)
         storage?.saveSelectedChildId(_selectedChildId.value)
-    }
-
-    override fun updatePaymentStatus(status: PaymentStatus) {
-        _payment.value = _payment.value.copy(status = status)
-        storage?.savePayment(_payment.value)
-    }
-
-    override fun registerReceipt() {
-        _payment.value = _payment.value.copy(receiptRegistered = true)
-        storage?.savePayment(_payment.value)
     }
 
     override fun markNotificationsAsRead() {

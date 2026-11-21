@@ -12,9 +12,11 @@ import androidx.navigation.compose.rememberNavController
 import devs.grupo5.sportpro.data.model.UserRole
 import devs.grupo5.sportpro.presentation.auth.AuthViewModel
 import devs.grupo5.sportpro.presentation.admin.moderation.ModerationDashboardScreen
+import devs.grupo5.sportpro.presentation.admin.payments.PaymentAdminScreen
 
 object AdminRoutes {
     const val MODERATION_PANEL = "moderation_panel"
+    const val PAYMENT_PANEL = "payment_panel"
 }
 
 @Composable
@@ -41,7 +43,15 @@ fun AdminMainContainerScreen(
     ) {
         composable(AdminRoutes.MODERATION_PANEL) {
             ModerationDashboardScreen(
-                onLogoutClick = onLogoutSuccess
+                onLogoutClick = onLogoutSuccess,
+                adminUid = currentUser?.uid.orEmpty(),
+                onPaymentsClick = { navController.navigate(AdminRoutes.PAYMENT_PANEL) }
+            )
+        }
+        composable(AdminRoutes.PAYMENT_PANEL) {
+            PaymentAdminScreen(
+                adminUid = currentUser?.uid.orEmpty(),
+                onBackClick = { navController.popBackStack() }
             )
         }
     }
