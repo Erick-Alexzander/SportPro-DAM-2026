@@ -58,6 +58,7 @@ import devs.grupo5.sportpro.data.model.isValidMinorBirthDate
 import devs.grupo5.sportpro.data.model.isValidPeruvianMobile
 import devs.grupo5.sportpro.data.model.nationalPeruvianMobile
 import devs.grupo5.sportpro.data.model.normalizeBirthDate
+import devs.grupo5.sportpro.data.repository.ChildLinkResult
 import devs.grupo5.sportpro.presentation.parent.components.ParentMetricTile
 import devs.grupo5.sportpro.presentation.parent.components.ParentStatusPill
 import devs.grupo5.sportpro.presentation.parent.theme.ParentBorder
@@ -82,7 +83,7 @@ private val childPositions = listOf("POR", "DEF", "MED", "DEL")
 fun RegisterChildDialog(
     initialChild: LinkedChild? = null,
     onDismiss: () -> Unit = {},
-    onSave: (LinkedChild) -> Unit = {}
+    onSave: (LinkedChild) -> ChildLinkResult = { ChildLinkResult.Success }
 ) {
     var firstName by rememberSaveable { mutableStateOf(initialChild?.firstName.orEmpty()) }
     var lastName by rememberSaveable { mutableStateOf(initialChild?.lastName.orEmpty()) }
@@ -92,6 +93,7 @@ fun RegisterChildDialog(
     var position by rememberSaveable { mutableStateOf(initialChild?.position ?: "DEL") }
     var parentRelation by rememberSaveable { mutableStateOf(initialChild?.parentRelation.orEmpty()) }
     var showErrors by rememberSaveable { mutableStateOf(false) }
+    var showDuplicateError by rememberSaveable { mutableStateOf(false) }
     var showDatePicker by rememberSaveable { mutableStateOf(false) }
 
     val relations = listOf("Padre", "Madre", "Apoderado(a)")
@@ -208,6 +210,13 @@ fun RegisterChildDialog(
                 if (showErrors && parentRelation.isBlank()) {
                     Text("Debe especificar su relación con el menor", color = ParentWarning, fontSize = 11.sp)
                 }
+                if (showDuplicateError) {
+                    Text(
+                        text = "Este jugador ya está registrado con el mismo nombre y fecha de nacimiento.",
+                        color = ParentWarning,
+                        fontSize = 11.sp
+                    )
+                }
 
                 Row(
                     modifier = Modifier
@@ -239,17 +248,20 @@ fun RegisterChildDialog(
                 onClick = {
                     showErrors = true
                     if (isValid) {
-                        onSave(
-                            (initialChild ?: LinkedChild(id = "lc_${System.currentTimeMillis()}")).copy(
-                                firstName = firstName.trim(),
-                                lastName = lastName.trim(),
-                                category = category,
-                                birthDate = birthDate.normalizeBirthDate(),
-                                jerseyNumber = jerseyNumber.toIntOrNull() ?: 0,
-                                position = position,
-                                parentRelation = parentRelation
-                            )
+                        val child = (initialChild ?: LinkedChild(id = "lc_${System.currentTimeMillis()}")).copy(
+                            firstName = firstName.trim(),
+                            lastName = lastName.trim(),
+                            category = category,
+                            birthDate = birthDate.normalizeBirthDate(),
+                            jerseyNumber = jerseyNumber.toIntOrNull() ?: 0,
+                            position = position,
+                            parentRelation = parentRelation
                         )
+                        if (onSave(child) == ChildLinkResult.Duplicate) {
+                            showDuplicateError = true
+                        } else {
+                            onDismiss()
+                        }
                     }
                 }
             ) {

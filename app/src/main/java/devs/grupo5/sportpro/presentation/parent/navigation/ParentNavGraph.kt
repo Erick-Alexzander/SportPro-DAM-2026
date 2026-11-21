@@ -20,6 +20,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import devs.grupo5.sportpro.data.model.UserRole
+import devs.grupo5.sportpro.data.repository.ChildLinkResult
 import devs.grupo5.sportpro.data.repository.FirebasePaymentRepository
 import devs.grupo5.sportpro.data.repository.MockParentRepository
 import devs.grupo5.sportpro.data.repository.ParentRepository
@@ -266,9 +267,8 @@ fun ParentMainContainerScreen(
                     parentRepository.linkChild(child)
                 } else {
                     parentRepository.updateChild(child)
+                    ChildLinkResult.Success
                 }
-                showChildDialog = false
-                childDialogTargetId = null
             }
         )
     }

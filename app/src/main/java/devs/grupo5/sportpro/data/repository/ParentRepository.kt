@@ -10,10 +10,17 @@ import devs.grupo5.sportpro.data.model.ParentNotification
 import devs.grupo5.sportpro.data.model.PaymentStatus
 import devs.grupo5.sportpro.data.model.UserProfile
 import devs.grupo5.sportpro.data.model.currentPaymentPeriod
+import devs.grupo5.sportpro.data.model.hasDuplicateOf
 import java.time.LocalDateTime
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+
+/** Resultado al intentar vincular un menor a la cuenta del apoderado. */
+sealed class ChildLinkResult {
+    data object Success : ChildLinkResult()
+    data object Duplicate : ChildLinkResult()
+}
 
 interface ParentRepository {
     val guardian: StateFlow<GuardianProfile>
@@ -35,8 +42,11 @@ interface ParentRepository {
 
     fun updateGuardian(profile: GuardianProfile)
 
-    /** Vincula un menor a la cuenta responsable. Si ya existe, lo actualiza. */
-    fun linkChild(child: LinkedChild)
+    /**
+     * Vincula un menor a la cuenta responsable. Si ya existe un menor con la misma
+     * identidad (nombre, apellido y fecha de nacimiento), devuelve [ChildLinkResult.Duplicate].
+     */
+    fun linkChild(child: LinkedChild): ChildLinkResult
 
     /** Actualiza los datos del menor ya vinculado (físicos, contacto, ficha). */
     fun updateChild(child: LinkedChild)
@@ -180,8 +190,11 @@ class MockParentRepository private constructor(
         storage?.saveGuardian(profile)
     }
 
-    override fun linkChild(child: LinkedChild) {
+    override fun linkChild(child: LinkedChild): ChildLinkResult {
         val current = _linkedChildren.value
+        if (current.hasDuplicateOf(child, excludedId = child.id.takeIf { it.isNotBlank() })) {
+            return ChildLinkResult.Duplicate
+        }
         val exists = current.any { it.id == child.id }
         _linkedChildren.value = if (exists) {
             current.map { if (it.id == child.id) child else it }
@@ -190,6 +203,7 @@ class MockParentRepository private constructor(
         }
         _selectedChildId.value = child.id
         persistChildren()
+        return ChildLinkResult.Success
     }
 
     override fun updateChild(child: LinkedChild) {
