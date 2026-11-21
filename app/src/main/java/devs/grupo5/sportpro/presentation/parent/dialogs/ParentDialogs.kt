@@ -35,6 +35,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -84,15 +85,15 @@ fun RegisterChildDialog(
     onDismiss: () -> Unit = {},
     onSave: (LinkedChild) -> Unit = {}
 ) {
-    var firstName by remember { mutableStateOf(initialChild?.firstName.orEmpty()) }
-    var lastName by remember { mutableStateOf(initialChild?.lastName.orEmpty()) }
-    var category by remember { mutableStateOf(initialChild?.category ?: "Sub-15") }
-    var birthDate by remember { mutableStateOf(initialChild?.birthDateIso.orEmpty()) }
-    var jerseyNumber by remember { mutableStateOf(initialChild?.jerseyNumber?.takeIf { it > 0 }?.toString().orEmpty()) }
-    var position by remember { mutableStateOf(initialChild?.position ?: "DEL") }
-    var parentRelation by remember { mutableStateOf(initialChild?.parentRelation.orEmpty()) }
-    var showErrors by remember { mutableStateOf(false) }
-    var showDatePicker by remember { mutableStateOf(false) }
+    var firstName by rememberSaveable { mutableStateOf(initialChild?.firstName.orEmpty()) }
+    var lastName by rememberSaveable { mutableStateOf(initialChild?.lastName.orEmpty()) }
+    var category by rememberSaveable { mutableStateOf(initialChild?.category ?: "Sub-15") }
+    var birthDate by rememberSaveable { mutableStateOf(initialChild?.birthDateIso.orEmpty()) }
+    var jerseyNumber by rememberSaveable { mutableStateOf(initialChild?.jerseyNumber?.takeIf { it > 0 }?.toString().orEmpty()) }
+    var position by rememberSaveable { mutableStateOf(initialChild?.position ?: "DEL") }
+    var parentRelation by rememberSaveable { mutableStateOf(initialChild?.parentRelation.orEmpty()) }
+    var showErrors by rememberSaveable { mutableStateOf(false) }
+    var showDatePicker by rememberSaveable { mutableStateOf(false) }
 
     val relations = listOf("Padre", "Madre", "Apoderado(a)")
     

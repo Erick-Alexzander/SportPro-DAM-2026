@@ -53,6 +53,9 @@ interface ParentRepository {
     fun registerReceipt()
 
     fun markNotificationsAsRead()
+
+    /** Limpia el estado en memoria al cerrar sesión sin borrar la persistencia por uid. */
+    fun clear()
 }
 
 class MockParentRepository private constructor(
@@ -235,6 +238,15 @@ class MockParentRepository private constructor(
     override fun markNotificationsAsRead() {
         _notifications.value = _notifications.value.map { it.copy(isRead = true) }
         storage?.saveNotifications(_notifications.value)
+    }
+
+    override fun clear() {
+        _guardian.value = GuardianProfile()
+        _linkedChildren.value = emptyList()
+        _selectedChildId.value = null
+        _payment.value = MonthlyPayment()
+        _notifications.value = emptyList()
+        storage = null
     }
 
     companion object {

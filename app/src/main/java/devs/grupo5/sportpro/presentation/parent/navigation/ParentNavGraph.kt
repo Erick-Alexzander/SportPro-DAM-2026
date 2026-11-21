@@ -18,7 +18,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import devs.grupo5.sportpro.data.model.LinkedChild
+import devs.grupo5.sportpro.data.model.UserRole
 import devs.grupo5.sportpro.data.repository.MockParentRepository
 import devs.grupo5.sportpro.data.repository.ParentRepository
 import devs.grupo5.sportpro.presentation.auth.AuthViewModel
@@ -74,18 +74,39 @@ fun ParentMainContainerScreen(
     val notifications by parentRepository.notifications.collectAsState()
 
     var showChildDialog by rememberSaveable { mutableStateOf(false) }
-    var childDialogTarget by remember { mutableStateOf<LinkedChild?>(null) }
+    var childDialogTargetId by rememberSaveable { mutableStateOf<String?>(null) }
     var showEditProfileDialog by rememberSaveable { mutableStateOf(false) }
     var showNotificationsDialog by rememberSaveable { mutableStateOf(false) }
     var showPaymentDialog by rememberSaveable { mutableStateOf(false) }
     var showStatsDialog by rememberSaveable { mutableStateOf(false) }
-    var physicalDialogTarget by remember { mutableStateOf<LinkedChild?>(null) }
-    var contactDialogTarget by remember { mutableStateOf<LinkedChild?>(null) }
-    var createAccessTarget by remember { mutableStateOf<LinkedChild?>(null) }
+    var physicalDialogTargetId by rememberSaveable { mutableStateOf<String?>(null) }
+    var contactDialogTargetId by rememberSaveable { mutableStateOf<String?>(null) }
+    var createAccessTargetId by rememberSaveable { mutableStateOf<String?>(null) }
     var eventMessage by rememberSaveable { mutableStateOf<String?>(null) }
 
+    val childDialogTarget = linkedChildren.firstOrNull { it.id == childDialogTargetId }
+    val physicalDialogTarget = linkedChildren.firstOrNull { it.id == physicalDialogTargetId }
+    val contactDialogTarget = linkedChildren.firstOrNull { it.id == contactDialogTargetId }
+    val createAccessTarget = linkedChildren.firstOrNull { it.id == createAccessTargetId }
+
     LaunchedEffect(currentUser) {
-        currentUser?.let { parentRepository.initFrom(it) }
+        val user = currentUser
+        if (user == null || user.role != UserRole.PARENT) {
+            parentRepository.clear()
+            onLogoutSuccess()
+        } else {
+            parentRepository.initFrom(user)
+        }
+    }
+
+    LaunchedEffect(linkedChildren) {
+        if (childDialogTargetId != null && childDialogTarget == null) {
+            showChildDialog = false
+            childDialogTargetId = null
+        }
+        if (physicalDialogTargetId != null && physicalDialogTarget == null) physicalDialogTargetId = null
+        if (contactDialogTargetId != null && contactDialogTarget == null) contactDialogTargetId = null
+        if (createAccessTargetId != null && createAccessTarget == null) createAccessTargetId = null
     }
 
     val navBackStackEntry by navController.currentBackStackEntryAsState()
@@ -131,7 +152,7 @@ fun ParentMainContainerScreen(
                         unreadNotifications = notifications.count { !it.isRead },
                         onNotificationsClick = { showNotificationsDialog = true },
                         onRegisterChildClick = {
-                            childDialogTarget = null
+                            childDialogTargetId = null
                             showChildDialog = true
                         },
                         onSelectChild = { parentRepository.selectChild(it) },
@@ -149,17 +170,17 @@ fun ParentMainContainerScreen(
                         guardian = guardian,
                         onSelectChild = { parentRepository.selectChild(it) },
                         onRegisterChildClick = {
-                            childDialogTarget = null
+                            childDialogTargetId = null
                             showChildDialog = true
                         },
                         onEditChildClick = { child ->
-                            childDialogTarget = child
+                            childDialogTargetId = child.id
                             showChildDialog = true
                         },
                         onUnlinkChildClick = { child -> parentRepository.unlinkChild(child.id) },
-                        onEditPhysicalDataClick = { child -> physicalDialogTarget = child },
-                        onEditContactClick = { child -> contactDialogTarget = child },
-                        onCreateAccessClick = { child -> createAccessTarget = child }
+                        onEditPhysicalDataClick = { child -> physicalDialogTargetId = child.id },
+                        onEditContactClick = { child -> contactDialogTargetId = child.id },
+                        onCreateAccessClick = { child -> createAccessTargetId = child.id }
                     )
                 }
 
@@ -229,7 +250,10 @@ fun ParentMainContainerScreen(
     if (showChildDialog) {
         RegisterChildDialog(
             initialChild = childDialogTarget,
-            onDismiss = { showChildDialog = false },
+            onDismiss = {
+                showChildDialog = false
+                childDialogTargetId = null
+            },
             onSave = { child ->
                 if (childDialogTarget == null) {
                     parentRepository.linkChild(child)
@@ -237,6 +261,7 @@ fun ParentMainContainerScreen(
                     parentRepository.updateChild(child)
                 }
                 showChildDialog = false
+                childDialogTargetId = null
             }
         )
     }
@@ -282,10 +307,10 @@ fun ParentMainContainerScreen(
     physicalDialogTarget?.let { child ->
         ChildPhysicalDataDialog(
             child = child,
-            onDismiss = { physicalDialogTarget = null },
+            onDismiss = { physicalDialogTargetId = null },
             onSave = { updated ->
                 parentRepository.updateChild(updated)
-                physicalDialogTarget = null
+                physicalDialogTargetId = null
             }
         )
     }
@@ -293,10 +318,10 @@ fun ParentMainContainerScreen(
     contactDialogTarget?.let { child ->
         ChildContactDialog(
             child = child,
-            onDismiss = { contactDialogTarget = null },
+            onDismiss = { contactDialogTargetId = null },
             onSave = { updated ->
                 parentRepository.updateChild(updated)
-                contactDialogTarget = null
+                contactDialogTargetId = null
             }
         )
     }
@@ -304,7 +329,7 @@ fun ParentMainContainerScreen(
     createAccessTarget?.let { child ->
         devs.grupo5.sportpro.presentation.parent.dialogs.CreateChildAccessDialog(
             child = child,
-            onDismiss = { createAccessTarget = null }
+            onDismiss = { createAccessTargetId = null }
         )
     }
 
