@@ -111,73 +111,77 @@ fun TrainerDashboardScreen(
 
             // Live Match Card
             item {
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(18.dp))
-                        .border(1.dp, SportProWarning.copy(alpha = 0.5f), RoundedCornerShape(18.dp))
-                        .clickable { onNavigateToMatches() },
-                    colors = CardDefaults.cardColors(containerColor = SportProCardBackground)
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(SportProWarning.copy(alpha = 0.2f))
-                                    .padding(horizontal = 10.dp, vertical = 4.dp)
+                val liveMatch by viewModel.liveMatch.collectAsState()
+                if (liveMatch != null) {
+                    val match = liveMatch!!
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(18.dp))
+                            .border(1.dp, SportProWarning.copy(alpha = 0.5f), RoundedCornerShape(18.dp))
+                            .clickable { onNavigateToMatches() },
+                        colors = CardDefaults.cardColors(containerColor = SportProCardBackground)
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(8.dp)
-                                            .clip(CircleShape)
-                                            .background(SportProWarning)
-                                    )
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text(
-                                        text = "PARTIDO EN VIVO",
-                                        color = SportProWarning,
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(SportProWarning.copy(alpha = 0.2f))
+                                        .padding(horizontal = 10.dp, vertical = 4.dp)
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(8.dp)
+                                                .clip(CircleShape)
+                                                .background(SportProWarning)
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = "PARTIDO EN VIVO",
+                                            color = SportProWarning,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
                                 }
+
+                                Text(
+                                    text = match.category,
+                                    fontSize = 12.sp,
+                                    color = SportProTextMuted,
+                                    fontWeight = FontWeight.SemiBold
+                                )
                             }
 
-                            Text(
-                                text = "Primera Div.",
-                                fontSize = 12.sp,
-                                color = SportProTextMuted,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                        }
+                            Spacer(modifier = Modifier.height(14.dp))
 
-                        Spacer(modifier = Modifier.height(14.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceEvenly,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text(if (match.isHome) "SportPro" else match.rival, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = SportProTextPrimary)
+                                    Text("Local", fontSize = 11.sp, color = SportProTextSecondary)
+                                }
 
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceEvenly,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text("SportPro", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = SportProTextPrimary)
-                                Text("Local", fontSize = 11.sp, color = SportProTextSecondary)
-                            }
+                                Text(
+                                    text = "${match.homeScore ?: 0} - ${match.awayScore ?: 0}",
+                                    fontSize = 28.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = SportProGreen
+                                )
 
-                            Text(
-                                text = "2 - 1",
-                                fontSize = 28.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                color = SportProGreen
-                            )
-
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text("CD Norte", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = SportProTextPrimary)
-                                Text("Visitante", fontSize = 11.sp, color = SportProTextSecondary)
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text(if (match.isHome) match.rival else "SportPro", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = SportProTextPrimary)
+                                    Text("Visitante", fontSize = 11.sp, color = SportProTextSecondary)
+                                }
                             }
                         }
                     }
@@ -261,8 +265,9 @@ fun TrainerDashboardScreen(
 
             // Next Match Card
             item {
-                val match = viewModel.nextMatch
-                if (match != null) {
+                val match by viewModel.nextMatch.collectAsState()
+                val currentMatch = match
+                if (currentMatch != null) {
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -284,7 +289,7 @@ fun TrainerDashboardScreen(
                                     color = SportProGreen
                                 )
                                 Text(
-                                    text = match.date,
+                                    text = currentMatch.date,
                                     fontSize = 12.sp,
                                     color = SportProTextMuted
                                 )
@@ -292,14 +297,14 @@ fun TrainerDashboardScreen(
 
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
-                                text = "SportPro vs ${match.rival}",
+                                text = "SportPro vs ${currentMatch.rival}",
                                 fontSize = 16.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = SportProTextPrimary
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = "${match.category} • ${match.time} • ${match.stadium}",
+                                text = "${currentMatch.category} • ${currentMatch.time} • ${currentMatch.stadium}",
                                 fontSize = 13.sp,
                                 color = SportProTextSecondary
                             )

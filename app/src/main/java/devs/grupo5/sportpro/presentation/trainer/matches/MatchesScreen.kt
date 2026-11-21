@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.Event
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -43,6 +44,7 @@ import devs.grupo5.sportpro.presentation.trainer.teams.CategoryChip
 import devs.grupo5.sportpro.presentation.trainer.theme.SportProCardBackground
 import devs.grupo5.sportpro.presentation.trainer.theme.SportProCardBorder
 import devs.grupo5.sportpro.presentation.trainer.theme.SportProDarkBackground
+import devs.grupo5.sportpro.presentation.trainer.theme.SportProError
 import devs.grupo5.sportpro.presentation.trainer.theme.SportProGreen
 import devs.grupo5.sportpro.presentation.trainer.theme.SportProGreenContainer
 import devs.grupo5.sportpro.presentation.trainer.theme.SportProTextMuted
@@ -57,7 +59,10 @@ fun MatchesScreen(
     onMatchClick: (Match) -> Unit = {}
 ) {
     val matches by viewModel.matches.collectAsState()
+    val teams by viewModel.teams.collectAsState()
     val selectedStatus by viewModel.selectedStatus.collectAsState()
+    val isLoading by viewModel.isLoading.collectAsState()
+    val syncError by viewModel.error.collectAsState()
 
     val statuses = listOf("Todos", "Programado", "En vivo", "Finalizado")
 
@@ -140,7 +145,24 @@ fun MatchesScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            if (filteredMatches.isEmpty()) {
+            if (syncError != null) {
+                Text(
+                    text = "Error de sincronización: $syncError",
+                    color = SportProError,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+            }
+
+            if (isLoading && filteredMatches.isEmpty()) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(color = SportProGreen)
+                }
+            } else if (filteredMatches.isEmpty()) {
                 Box(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
@@ -156,7 +178,10 @@ fun MatchesScreen(
                     verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
                     items(filteredMatches, key = { it.id }) { match ->
-                        MatchCard(match = match, onClick = { onMatchClick(match) })
+                        val team = teams.find { it.id == match.teamId }
+                        val tName = team?.name
+
+                        MatchCard(match = match, teamName = tName, onClick = { onMatchClick(match) })
                     }
                 }
             }
@@ -167,6 +192,7 @@ fun MatchesScreen(
 @Composable
 fun MatchCard(
     match: Match,
+    teamName: String?,
     onClick: () -> Unit = {}
 ) {
     Card(
@@ -195,9 +221,13 @@ fun MatchCard(
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                val resolvedTeamName = teamName ?: "Equipo no disponible"
+                val homeTeamName = if (match.isHome) resolvedTeamName else match.rival
+                val awayTeamName = if (match.isHome) match.rival else resolvedTeamName
+
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("SportPro", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = SportProTextPrimary)
-                    Text(if (match.isHome) "Local" else "Visitante", fontSize = 11.sp, color = SportProTextSecondary)
+                    Text(homeTeamName, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = SportProTextPrimary)
+                    Text("Local", fontSize = 11.sp, color = SportProTextSecondary)
                 }
 
                 if (match.homeScore != null && match.awayScore != null) {
@@ -219,8 +249,8 @@ fun MatchCard(
                 }
 
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(match.rival, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = SportProTextPrimary)
-                    Text(if (match.isHome) "Visitante" else "Local", fontSize = 11.sp, color = SportProTextSecondary)
+                    Text(awayTeamName, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = SportProTextPrimary)
+                    Text("Visitante", fontSize = 11.sp, color = SportProTextSecondary)
                 }
             }
 

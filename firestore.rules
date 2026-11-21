@@ -14,6 +14,18 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "TRAINER";
     }
 
+    function isPlayer() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "PLAYER";
+    }
+
+    function isAdmin() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "ADMIN";
+    }
+
     function isOwner(data) {
       return signedIn() && data.ownerUid == request.auth.uid;
     }
@@ -28,7 +40,7 @@ service cloud.firestore {
       allow get: if signedIn()
         && request.auth.uid == userId;
 
-      allow list: if false;
+      allow list: if isAdmin();
 
       allow create: if signedIn()
         && request.auth.uid == userId
@@ -37,7 +49,7 @@ service cloud.firestore {
         ])
         && request.resource.data.keys().hasOnly([
           'uid', 'email', 'firstName', 'lastName',
-          'role', 'birthDate'
+          'role', 'birthDate', 'playerProfile'
         ])
         && request.resource.data.uid == userId
         && request.resource.data.email is string
@@ -45,14 +57,39 @@ service cloud.firestore {
         && request.resource.data.lastName is string
         && request.resource.data.role in [
           'TRAINER', 'PLAYER', 'PARENT'
-        ];
+        ]
+        && (
+          !('playerProfile' in request.resource.data) ||
+          (
+            request.resource.data.playerProfile is map
+            && request.resource.data.playerProfile.keys().hasOnly([
+              'position', 'jerseyNumber', 'category', 'dominantFoot', 'status', 'teamName',
+              'heightCm', 'weightKg', 'size', 'stats', 'attributes', 'privacySettings'
+            ])
+            && request.resource.data.role == 'PLAYER'
+          )
+        );
 
       allow update: if signedIn()
         && request.auth.uid == userId
+        && isImmutable('uid')
+        && isImmutable('role')
+        && isImmutable('email')
         && request.resource.data.diff(resource.data)
           .affectedKeys().hasOnly([
-            'firstName', 'lastName', 'birthDate'
-          ]);
+            'firstName', 'lastName', 'birthDate', 'playerProfile'
+          ])
+        && (
+          !('playerProfile' in request.resource.data.diff(resource.data).affectedKeys()) ||
+          (
+            request.resource.data.playerProfile is map
+            && request.resource.data.playerProfile.keys().hasOnly([
+              'position', 'jerseyNumber', 'category', 'dominantFoot', 'status', 'teamName',
+              'heightCm', 'weightKg', 'size', 'stats', 'attributes', 'privacySettings'
+            ])
+            && resource.data.role == 'PLAYER'
+          )
+        );
 
       allow delete: if false;
     }
@@ -201,6 +238,215 @@ service cloud.firestore {
                 )
             )
         );
+
+      allow delete: if false;
+    }
+
+    // --- REGLAS PARA PARTIDOS ---
+
+    match /matches/{matchId} {
+      allow get, list: if isOwner(resource.data);
+
+      allow create: if isTrainer()
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.id == matchId
+        && request.resource.data.keys().hasAll([
+          'id', 'ownerUid', 'teamId', 'rival', 'date', 'time', 'stadium', 'category', 'status', 'isHome', 'homeScore', 'awayScore', 'currentMinute', 'isPaused', 'events'
+        ])
+        && request.resource.data.keys().hasOnly([
+          'id', 'ownerUid', 'teamId', 'rival', 'date', 'time', 'stadium', 'category', 'status', 'isHome', 'homeScore', 'awayScore', 'currentMinute', 'isPaused', 'events', 'aiSummary'
+        ])
+        && request.resource.data.status == 'Programado'
+        && request.resource.data.events == []
+        && request.resource.data.homeScore == 0
+        && request.resource.data.awayScore == 0
+        && request.resource.data.currentMinute == 0
+        && request.resource.data.isPaused == false
+        && getAfter(/databases/$(database)/documents/teams/$(request.resource.data.teamId)).data.ownerUid == request.auth.uid;
+
+      allow update: if isOwner(resource.data)
+        && isImmutable('id')
+        && isImmutable('ownerUid')
+        && isImmutable('teamId')
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'rival', 'date', 'time', 'stadium', 'category', 'status', 'isHome', 'homeScore', 'awayScore', 'currentMinute', 'isPaused', 'events', 'aiSummary'
+        ])
+        && request.resource.data.status in ['Programado', 'En vivo', 'Finalizado']
+        && (
+             (resource.data.status == 'Programado' && request.resource.data.status in ['Programado', 'En vivo']) ||
+             (resource.data.status == 'En vivo' && request.resource.data.status in ['En vivo', 'Finalizado']) ||
+             (resource.data.status == 'Finalizado' && request.resource.data.status == 'Finalizado')
+        )
+        && (
+            resource.data.status != 'Finalizado' ||
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['aiSummary'])
+        )
+        && (
+            isImmutable('events') ||
+            (
+                request.resource.data.events is list &&
+                request.resource.data.events.size() == resource.data.events.size() + 1 &&
+                request.resource.data.events.hasAll(resource.data.events) &&
+                request.resource.data.events[request.resource.data.events.size() - 1].keys().hasAll(['id', 'matchId', 'minute', 'eventType', 'icon', 'player', 'team', 'status', 'detail']) &&
+                request.resource.data.events[request.resource.data.events.size() - 1].eventType in ['Gol', 'T. Amarilla', 'T. Roja', 'Cambio', 'Córner', 'Falta', 'Penal', 'Fuera de juego'] &&
+                request.resource.data.events[request.resource.data.events.size() - 1].team in ['Local', 'Visitante'] &&
+                resource.data.status == 'En vivo'
+            )
+        )
+        && (
+            isImmutable('isHome') || request.resource.data.status == 'Programado'
+        )
+        && (
+            isImmutable('currentMinute') || (request.resource.data.currentMinute is int && request.resource.data.currentMinute >= 0)
+        )
+        && (
+            (isImmutable('events') && isImmutable('homeScore') && isImmutable('awayScore')) ||
+            (
+                !isImmutable('events') &&
+                request.resource.data.events[request.resource.data.events.size() - 1].eventType != 'Gol' &&
+                isImmutable('homeScore') &&
+                isImmutable('awayScore')
+            ) ||
+            (
+                !isImmutable('events') &&
+                request.resource.data.events[request.resource.data.events.size() - 1].eventType == 'Gol' &&
+                request.resource.data.events[request.resource.data.events.size() - 1].team == 'Local' &&
+                request.resource.data.homeScore == (resource.data.homeScore + 1) &&
+                isImmutable('awayScore')
+            ) ||
+            (
+                !isImmutable('events') &&
+                request.resource.data.events[request.resource.data.events.size() - 1].eventType == 'Gol' &&
+                request.resource.data.events[request.resource.data.events.size() - 1].team == 'Visitante' &&
+                request.resource.data.awayScore == (resource.data.awayScore + 1) &&
+                isImmutable('homeScore')
+            )
+        );
+
+      allow delete: if false;
+    }
+
+    // --- REGLAS PARA VINCULACIÓN DE CUENTAS ---
+
+    match /linkInvitations/{inviteId} {
+      allow get: if signedIn();
+      allow list: if signedIn() && resource.data.trainerUid == request.auth.uid;
+
+      allow create: if isTrainer()
+        && request.resource.data.keys().hasAll(['inviteId', 'playerId', 'trainerUid', 'createdAt', 'expiresAt', 'status'])
+        && request.resource.data.keys().hasOnly(['inviteId', 'playerId', 'trainerUid', 'createdAt', 'expiresAt', 'status'])
+        && request.resource.data.inviteId == inviteId
+        && request.resource.data.trainerUid == request.auth.uid
+        && request.resource.data.status == 'PENDING'
+        && get(/databases/$(database)/documents/players/$(request.resource.data.playerId)).data.ownerUid == request.auth.uid
+        && !exists(/databases/$(database)/documents/playerAccountLinks/$(request.resource.data.playerId))
+        && request.resource.data.expiresAt > request.time.toMillis()
+        && request.resource.data.expiresAt <= request.time.toMillis() + (24 * 60 * 60 * 1000);
+
+      allow update: if isTrainer()
+        && resource.data.trainerUid == request.auth.uid
+        && isImmutable('inviteId')
+        && isImmutable('playerId')
+        && isImmutable('trainerUid')
+        && isImmutable('createdAt')
+        && isImmutable('expiresAt')
+        && request.resource.data.status == 'CONSUMED'
+        && resource.data.status == 'PENDING'
+        && getAfter(/databases/$(database)/documents/linkInvitations/$(inviteId)/claims/$(getAfter(/databases/$(database)/documents/playerAccountLinks/$(resource.data.playerId)).data.userUid)).data.status == 'APPROVED';
+
+      allow delete: if false;
+
+      match /claims/{userUid} {
+        allow get: if signedIn() && (userUid == request.auth.uid || get(/databases/$(database)/documents/linkInvitations/$(inviteId)).data.trainerUid == request.auth.uid);
+        allow list: if signedIn() && get(/databases/$(database)/documents/linkInvitations/$(inviteId)).data.trainerUid == request.auth.uid;
+
+        allow create: if isPlayer()
+          && userUid == request.auth.uid
+          && request.resource.data.keys().hasAll(['userUid', 'inviteId', 'createdAt', 'status'])
+          && request.resource.data.keys().hasOnly(['userUid', 'inviteId', 'createdAt', 'status'])
+          && request.resource.data.userUid == request.auth.uid
+          && request.resource.data.inviteId == inviteId
+          && request.resource.data.status == 'PENDING'
+          && get(/databases/$(database)/documents/linkInvitations/$(inviteId)).data.status == 'PENDING'
+          && get(/databases/$(database)/documents/linkInvitations/$(inviteId)).data.expiresAt > request.time.toMillis()
+          && !exists(/databases/$(database)/documents/userPlayerLinks/$(request.auth.uid));
+
+        allow update: if isTrainer()
+          && get(/databases/$(database)/documents/linkInvitations/$(inviteId)).data.trainerUid == request.auth.uid
+          && isImmutable('userUid')
+          && isImmutable('inviteId')
+          && isImmutable('createdAt')
+          && request.resource.data.status == 'APPROVED'
+          && resource.data.status == 'PENDING'
+          && getAfter(/databases/$(database)/documents/linkInvitations/$(inviteId)).data.status == 'CONSUMED';
+
+        allow delete: if false;
+      }
+    }
+
+    match /playerAccountLinks/{playerId} {
+      allow get: if signedIn() && (
+        (resource != null && (resource.data.trainerUid == request.auth.uid || resource.data.userUid == request.auth.uid)) ||
+        (resource == null && get(/databases/$(database)/documents/players/$(playerId)).data.ownerUid == request.auth.uid)
+      );
+      allow list: if false;
+      allow create: if isTrainer()
+        && request.resource.data.keys().hasAll(['playerId', 'userUid', 'trainerUid', 'inviteId', 'linkedAt'])
+        && request.resource.data.keys().hasOnly(['playerId', 'userUid', 'trainerUid', 'inviteId', 'linkedAt'])
+        && request.resource.data.playerId == playerId
+        && request.resource.data.trainerUid == request.auth.uid
+        && get(/databases/$(database)/documents/players/$(playerId)).data.ownerUid == request.auth.uid
+        && get(/databases/$(database)/documents/users/$(request.resource.data.userUid)).data.role == 'PLAYER'
+        && !exists(/databases/$(database)/documents/userPlayerLinks/$(request.resource.data.userUid))
+        && !exists(/databases/$(database)/documents/playerAccountLinks/$(playerId))
+        && request.resource.data.linkedAt == request.time
+        && getAfter(/databases/$(database)/documents/userPlayerLinks/$(request.resource.data.userUid)).data.playerId == playerId
+        && getAfter(/databases/$(database)/documents/linkInvitations/$(request.resource.data.inviteId)).data.status == 'CONSUMED'
+        && getAfter(/databases/$(database)/documents/linkInvitations/$(request.resource.data.inviteId)/claims/$(request.resource.data.userUid)).data.status == 'APPROVED';
+
+      allow update, delete: if false;
+    }
+
+    match /userPlayerLinks/{userUid} {
+      allow get: if signedIn() && (userUid == request.auth.uid || (resource != null && resource.data.trainerUid == request.auth.uid));
+      allow list: if false;
+      allow create: if isTrainer()
+        && request.resource.data.keys().hasAll(['playerId', 'userUid', 'trainerUid', 'inviteId', 'linkedAt'])
+        && request.resource.data.keys().hasOnly(['playerId', 'userUid', 'trainerUid', 'inviteId', 'linkedAt'])
+        && request.resource.data.userUid == userUid
+        && request.resource.data.trainerUid == request.auth.uid
+        && !exists(/databases/$(database)/documents/userPlayerLinks/$(userUid))
+        && request.resource.data.linkedAt == request.time
+        && getAfter(/databases/$(database)/documents/playerAccountLinks/$(request.resource.data.playerId)).data.userUid == userUid
+        && getAfter(/databases/$(database)/documents/linkInvitations/$(request.resource.data.inviteId)).data.status == 'CONSUMED'
+        && getAfter(/databases/$(database)/documents/linkInvitations/$(request.resource.data.inviteId)/claims/$(request.resource.data.userUid)).data.status == 'APPROVED';
+
+      allow update, delete: if false;
+    }
+
+    match /payments/{guardianUid} {
+      function isGuardianOwner() {
+        return signedIn() && request.auth.uid == guardianUid;
+      }
+
+      allow get: if isGuardianOwner() || isAdmin();
+      allow list: if isAdmin();
+
+      allow create: if (isGuardianOwner()
+        && request.resource.data.keys().hasOnly(['period', 'status', 'receiptRegistered'])
+        && request.resource.data.status == 'PENDIENTE'
+        && request.resource.data.receiptRegistered == true)
+        || (isAdmin()
+        && request.resource.data.keys().hasOnly(['period', 'status', 'updatedBy', 'updatedAt'])
+        && request.resource.data.status in ['PENDIENTE', 'PAGADO']);
+
+      allow update: if (isGuardianOwner()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['receiptRegistered'])
+        && isImmutable('status')
+        && isImmutable('period'))
+        || (isAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['period', 'status', 'updatedBy', 'updatedAt'])
+        && request.resource.data.status in ['PENDIENTE', 'PAGADO']);
 
       allow delete: if false;
     }

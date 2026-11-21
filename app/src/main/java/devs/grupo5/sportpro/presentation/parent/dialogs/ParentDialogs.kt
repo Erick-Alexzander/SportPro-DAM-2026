@@ -35,6 +35,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -51,13 +52,13 @@ import devs.grupo5.sportpro.data.model.LinkedChild
 import devs.grupo5.sportpro.data.model.MonthlyPayment
 import devs.grupo5.sportpro.data.model.ParentNotification
 import devs.grupo5.sportpro.data.model.MINOR_MAX_AGE
-import devs.grupo5.sportpro.data.model.PaymentStatus
 import devs.grupo5.sportpro.data.model.ageInYears
 import devs.grupo5.sportpro.data.model.formatPeruvianMobile
 import devs.grupo5.sportpro.data.model.isValidMinorBirthDate
 import devs.grupo5.sportpro.data.model.isValidPeruvianMobile
 import devs.grupo5.sportpro.data.model.nationalPeruvianMobile
 import devs.grupo5.sportpro.data.model.normalizeBirthDate
+import devs.grupo5.sportpro.data.repository.ChildLinkResult
 import devs.grupo5.sportpro.presentation.parent.components.ParentMetricTile
 import devs.grupo5.sportpro.presentation.parent.components.ParentStatusPill
 import devs.grupo5.sportpro.presentation.parent.theme.ParentBorder
@@ -82,17 +83,18 @@ private val childPositions = listOf("POR", "DEF", "MED", "DEL")
 fun RegisterChildDialog(
     initialChild: LinkedChild? = null,
     onDismiss: () -> Unit = {},
-    onSave: (LinkedChild) -> Unit = {}
+    onSave: (LinkedChild) -> ChildLinkResult = { ChildLinkResult.Success }
 ) {
-    var firstName by remember { mutableStateOf(initialChild?.firstName.orEmpty()) }
-    var lastName by remember { mutableStateOf(initialChild?.lastName.orEmpty()) }
-    var category by remember { mutableStateOf(initialChild?.category ?: "Sub-15") }
-    var birthDate by remember { mutableStateOf(initialChild?.birthDateIso.orEmpty()) }
-    var jerseyNumber by remember { mutableStateOf(initialChild?.jerseyNumber?.takeIf { it > 0 }?.toString().orEmpty()) }
-    var position by remember { mutableStateOf(initialChild?.position ?: "DEL") }
-    var parentRelation by remember { mutableStateOf(initialChild?.parentRelation.orEmpty()) }
-    var showErrors by remember { mutableStateOf(false) }
-    var showDatePicker by remember { mutableStateOf(false) }
+    var firstName by rememberSaveable { mutableStateOf(initialChild?.firstName.orEmpty()) }
+    var lastName by rememberSaveable { mutableStateOf(initialChild?.lastName.orEmpty()) }
+    var category by rememberSaveable { mutableStateOf(initialChild?.category ?: "Sub-15") }
+    var birthDate by rememberSaveable { mutableStateOf(initialChild?.birthDateIso.orEmpty()) }
+    var jerseyNumber by rememberSaveable { mutableStateOf(initialChild?.jerseyNumber?.takeIf { it > 0 }?.toString().orEmpty()) }
+    var position by rememberSaveable { mutableStateOf(initialChild?.position ?: "DEL") }
+    var parentRelation by rememberSaveable { mutableStateOf(initialChild?.parentRelation.orEmpty()) }
+    var showErrors by rememberSaveable { mutableStateOf(false) }
+    var showDuplicateError by rememberSaveable { mutableStateOf(false) }
+    var showDatePicker by rememberSaveable { mutableStateOf(false) }
 
     val relations = listOf("Padre", "Madre", "Apoderado(a)")
     
@@ -208,6 +210,13 @@ fun RegisterChildDialog(
                 if (showErrors && parentRelation.isBlank()) {
                     Text("Debe especificar su relación con el menor", color = ParentWarning, fontSize = 11.sp)
                 }
+                if (showDuplicateError) {
+                    Text(
+                        text = "Este jugador ya está registrado con el mismo nombre y fecha de nacimiento.",
+                        color = ParentWarning,
+                        fontSize = 11.sp
+                    )
+                }
 
                 Row(
                     modifier = Modifier
@@ -239,17 +248,20 @@ fun RegisterChildDialog(
                 onClick = {
                     showErrors = true
                     if (isValid) {
-                        onSave(
-                            (initialChild ?: LinkedChild(id = "lc_${System.currentTimeMillis()}")).copy(
-                                firstName = firstName.trim(),
-                                lastName = lastName.trim(),
-                                category = category,
-                                birthDate = birthDate.normalizeBirthDate(),
-                                jerseyNumber = jerseyNumber.toIntOrNull() ?: 0,
-                                position = position,
-                                parentRelation = parentRelation
-                            )
+                        val child = (initialChild ?: LinkedChild(id = "lc_${System.currentTimeMillis()}")).copy(
+                            firstName = firstName.trim(),
+                            lastName = lastName.trim(),
+                            category = category,
+                            birthDate = birthDate.normalizeBirthDate(),
+                            jerseyNumber = jerseyNumber.toIntOrNull() ?: 0,
+                            position = position,
+                            parentRelation = parentRelation
                         )
+                        if (onSave(child) == ChildLinkResult.Duplicate) {
+                            showDuplicateError = true
+                        } else {
+                            onDismiss()
+                        }
                     }
                 }
             ) {
@@ -545,7 +557,6 @@ fun NotificationsDialog(
 fun PaymentStatusDialog(
     payment: MonthlyPayment,
     onDismiss: () -> Unit = {},
-    onStatusChange: (PaymentStatus) -> Unit = {},
     onUploadReceipt: () -> Unit = {}
 ) {
     AlertDialog(
@@ -597,28 +608,11 @@ fun PaymentStatusDialog(
                 )
 
                 Text(
-                    text = "Actualiza el estado según el comprobante que presentaste en la academia.",
+                    text = "El estado lo actualiza la academia cuando valida tu comprobante.",
                     fontSize = 12.sp,
                     color = ParentTextSecondary,
                     lineHeight = 17.sp
                 )
-
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    PaymentChoiceButton(
-                        label = "Pagado",
-                        selected = payment.status == PaymentStatus.PAGADO,
-                        selectedColor = ParentEmerald,
-                        onClick = { onStatusChange(PaymentStatus.PAGADO) },
-                        modifier = Modifier.weight(1f)
-                    )
-                    PaymentChoiceButton(
-                        label = "Pendiente",
-                        selected = payment.status == PaymentStatus.PENDIENTE,
-                        selectedColor = ParentWarning,
-                        onClick = { onStatusChange(PaymentStatus.PENDIENTE) },
-                        modifier = Modifier.weight(1f)
-                    )
-                }
 
                 Button(
                     onClick = onUploadReceipt,
@@ -636,7 +630,7 @@ fun PaymentStatusDialog(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = if (payment.receiptRegistered) "Comprobante registrado" else "Registrar comprobante",
+                        text = if (payment.receiptRegistered) "Comprobante enviado" else "Enviar comprobante",
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold
                     )
@@ -1106,36 +1100,6 @@ fun CreateChildAccessDialog(
             }
         }
     )
-}
-
-@Composable
-private fun PaymentChoiceButton(
-    label: String,
-    selected: Boolean,
-    selectedColor: Color,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(12.dp))
-            .background(if (selected) selectedColor.copy(alpha = 0.15f) else ParentSurfaceVariant)
-            .border(
-                width = if (selected) 1.5.dp else 1.dp,
-                color = if (selected) selectedColor else ParentBorder,
-                shape = RoundedCornerShape(12.dp)
-            )
-            .clickable { onClick() }
-            .padding(vertical = 12.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = label,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.Bold,
-            color = if (selected) selectedColor else ParentTextSecondary
-        )
-    }
 }
 
 @Composable

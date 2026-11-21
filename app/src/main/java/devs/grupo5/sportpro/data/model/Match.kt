@@ -1,5 +1,7 @@
 package devs.grupo5.sportpro.data.model
 
+import com.google.firebase.firestore.PropertyName
+
 data class MatchEvent(
     val id: String = "",
     val matchId: String = "",
@@ -17,11 +19,14 @@ data class AiSummary(
     val development: String = "",
     val highlights: String = "",
     val analysisNote: String = "Este resumen fue generado exclusivamente con los eventos registrados durante el partido.",
-    val isApproved: Boolean = false
+    @get:PropertyName("isApproved")
+    @set:PropertyName("isApproved")
+    var isApproved: Boolean = false
 )
 
 data class Match(
     val id: String = "",
+    val ownerUid: String = "",
     val teamId: String = "",
     val rival: String = "",
     val date: String = "",
@@ -29,11 +34,19 @@ data class Match(
     val stadium: String = "",
     val category: String = "", // "Primera", "Sub-15", "Sub-10"
     val status: String = "Programado", // "Programado", "En vivo", "Finalizado"
-    val isHome: Boolean = true, // true: Local, false: Visitante
-    val homeScore: Int? = null,
-    val awayScore: Int? = null,
-    val currentMinute: Int = 68,
-    val isPaused: Boolean = false,
+
+    @get:PropertyName("isHome")
+    @set:PropertyName("isHome")
+    var isHome: Boolean = true, // true: Local, false: Visitante
+
+    val homeScore: Int? = 0,
+    val awayScore: Int? = 0,
+    val currentMinute: Int = 0,
+
+    @get:PropertyName("isPaused")
+    @set:PropertyName("isPaused")
+    var isPaused: Boolean = false,
+
     val events: List<MatchEvent> = emptyList(),
     val aiSummary: AiSummary? = null
 )
