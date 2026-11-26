@@ -17,10 +17,6 @@ object FirebaseEmulator {
     private const val FUNCTIONS_PORT = 5002
 
     fun configureIfDebug() {
-        // TEMPORAL: desactivado para probar contra el proyecto real.
-        // Para volver a emuladores, elimina este return.
-        return
-
         val host = emulatorHost()
         FirebaseAuth.getInstance().useEmulator(host, AUTH_PORT)
         FirebaseFirestore.getInstance().useEmulator(host, FIRESTORE_PORT)
