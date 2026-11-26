@@ -11,11 +11,18 @@ import devs.grupo5.sportpro.data.model.ParentNotification
 import devs.grupo5.sportpro.data.model.ParentPayment
 import devs.grupo5.sportpro.data.model.UserProfile
 import devs.grupo5.sportpro.data.model.currentPaymentPeriod
+import devs.grupo5.sportpro.data.model.hasDuplicateOf
 import devs.grupo5.sportpro.presentation.parent.calendar.ParentEvent
 import java.time.LocalDateTime
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+
+/** Resultado al intentar vincular un menor a la cuenta del apoderado. */
+sealed class ChildLinkResult {
+    data object Success : ChildLinkResult()
+    data object Duplicate : ChildLinkResult()
+}
 
 interface ParentRepository {
     val guardian: StateFlow<GuardianProfile>
@@ -45,8 +52,11 @@ interface ParentRepository {
 
     fun updateGuardian(profile: GuardianProfile)
 
-    /** Vincula un menor a la cuenta responsable. Si ya existe, lo actualiza. */
-    fun linkChild(child: LinkedChild)
+    /**
+     * Vincula un menor a la cuenta responsable. Si ya existe un menor con la misma
+     * identidad (nombre, apellido y fecha de nacimiento), devuelve [ChildLinkResult.Duplicate].
+     */
+    fun linkChild(child: LinkedChild): ChildLinkResult
 
     /** Actualiza los datos del menor ya vinculado (físicos, contacto, ficha). */
     fun updateChild(child: LinkedChild)
@@ -58,14 +68,17 @@ interface ParentRepository {
     fun selectChild(childId: String)
 
     /**
-     * Registra el comprobante de pago del período actual. El estado PENDIENTE/PAGADO lo
-     * define la academia, por eso no existe una acción para cambiarlo desde el apoderado.
+     * Registra el comprobante de pago del per?odo actual. El estado PENDIENTE/PAGADO lo
+     * define la academia, por eso no existe una acci?n para cambiarlo desde el apoderado.
      */
     fun registerReceipt(playerId: String)
 
     fun markAnnouncementAsRead(announcementId: String)
 
     fun markNotificationsAsRead()
+
+    /** Limpia el estado en memoria al cerrar sesión sin borrar la persistencia por uid. */
+    fun clear()
 }
 
 class MockParentRepository private constructor(
@@ -270,8 +283,11 @@ class MockParentRepository private constructor(
         storage?.saveGuardian(profile)
     }
 
-    override fun linkChild(child: LinkedChild) {
+    override fun linkChild(child: LinkedChild): ChildLinkResult {
         val current = _linkedChildren.value
+        if (current.hasDuplicateOf(child, excludedId = child.id.takeIf { it.isNotBlank() })) {
+            return ChildLinkResult.Duplicate
+        }
         val exists = current.any { it.id == child.id }
         _linkedChildren.value = if (exists) {
             current.map { if (it.id == child.id) child else it }
@@ -285,6 +301,7 @@ class MockParentRepository private constructor(
         }
         persistChildren()
         persistPayments()
+        return ChildLinkResult.Success
     }
 
     override fun updateChild(child: LinkedChild) {
@@ -354,6 +371,15 @@ class MockParentRepository private constructor(
     override fun markNotificationsAsRead() {
         _notifications.value = _notifications.value.map { it.copy(isRead = true) }
         storage?.saveNotifications(_notifications.value)
+    }
+
+    override fun clear() {
+        _guardian.value = GuardianProfile()
+        _linkedChildren.value = emptyList()
+        _selectedChildId.value = null
+        _payments.value = emptyList()
+        _notifications.value = emptyList()
+        storage = null
     }
 
     companion object {

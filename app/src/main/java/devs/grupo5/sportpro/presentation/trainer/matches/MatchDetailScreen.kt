@@ -33,6 +33,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -64,10 +65,15 @@ fun MatchDetailScreen(
     matchId: String,
     viewModel: MatchViewModel,
     onBackClick: () -> Unit,
-    onAiSummaryClick: (String) -> Unit
+    onAiSummaryClick: (String) -> Unit,
+    onLiveMatchClick: (String) -> Unit = {}
 ) {
     val matches by viewModel.matches.collectAsState()
     val match = matches.find { it.id == matchId } ?: viewModel.getMatchById(matchId)
+    val teams by viewModel.teams.collectAsState()
+
+    val isLoading by viewModel.isLoading.collectAsState()
+    val errorMsg by viewModel.error.collectAsState()
 
     var selectedSectionDialog by remember { mutableStateOf<String?>(null) }
     var showTimelineSheet by remember { mutableStateOf(false) }
@@ -84,9 +90,12 @@ fun MatchDetailScreen(
         return
     }
 
-    val homeTeamName = if (match.isHome) "SportPro" else match.rival
-    val awayTeamName = if (match.isHome) match.rival else "SportPro"
     val isFinalized = match.status.equals("Finalizado", ignoreCase = true)
+    val team = teams.find { it.id == match.teamId }
+    val sportProName = team?.name ?: "Equipo no disponible"
+
+    val homeTeamName = if (match.isHome) sportProName else match.rival
+    val awayTeamName = if (match.isHome) match.rival else sportProName
 
     Box(
         modifier = Modifier
@@ -178,7 +187,7 @@ fun MatchDetailScreen(
                                     color = SportProTextPrimary
                                 )
                                 Text(
-                                    text = if (match.isHome) "Local" else "Visitante",
+                                    text = "Local",
                                     fontSize = 11.sp,
                                     color = SportProTextSecondary
                                 )
@@ -213,7 +222,7 @@ fun MatchDetailScreen(
                                     color = SportProTextPrimary
                                 )
                                 Text(
-                                    text = if (match.isHome) "Visitante" else "Local",
+                                    text = "Visitante",
                                     fontSize = 11.sp,
                                     color = SportProTextSecondary
                                 )
@@ -262,6 +271,76 @@ fun MatchDetailScreen(
                 }
 
                 Spacer(modifier = Modifier.height(20.dp))
+            }
+
+            // Live / Start Match Button Area
+            if (match.status == "Programado") {
+                item {
+                    if (errorMsg != null) {
+                        Text(
+                            text = errorMsg ?: "",
+                            color = devs.grupo5.sportpro.presentation.trainer.theme.SportProError,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
+                    }
+                    Button(
+                        onClick = {
+                            if (!isLoading) {
+                                viewModel.startMatch(match.id) { success ->
+                                    if (success) {
+                                        onLiveMatchClick(match.id)
+                                    }
+                                }
+                            }
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(52.dp),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = SportProGreen,
+                            contentColor = Color.Black
+                        )
+                    ) {
+                        if (isLoading) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(24.dp),
+                                color = Color.Black,
+                                strokeWidth = 2.dp
+                            )
+                        } else {
+                            Text(
+                                text = "Iniciar Partido",
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(20.dp))
+                }
+            } else if (match.status == "En vivo") {
+                item {
+                    Button(
+                        onClick = { onLiveMatchClick(match.id) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(52.dp),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = devs.grupo5.sportpro.presentation.trainer.theme.SportProWarning,
+                            contentColor = Color.Black
+                        )
+                    ) {
+                        Text(
+                            text = "Ir al seguimiento en vivo",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(20.dp))
+                }
             }
 
             // Quick Actions: "Convocatoria", "Alineación", y ÚNICAMENTE "Resumen IA" SI status == "Finalizado"
@@ -401,7 +480,8 @@ fun MatchDetailScreen(
                         )
                     }
                 } else {
-                    match.events.forEach { ev ->
+                    val sortedEvents = match.events.sortedBy { it.minute }
+                    sortedEvents.forEach { ev ->
                         DetailedMatchEventItem(event = ev)
                         Spacer(modifier = Modifier.height(8.dp))
                     }
@@ -555,8 +635,9 @@ fun MatchDetailScreen(
                     if (match.events.isEmpty()) {
                         Text("Aún no hay eventos en la cronología.", color = SportProTextMuted, fontSize = 13.sp)
                     } else {
+                        val sortedEvents = match.events.sortedBy { it.minute }
                         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            items(match.events, key = { it.id }) { ev ->
+                            items(sortedEvents, key = { it.id }) { ev ->
                                 DetailedMatchEventItem(event = ev)
                             }
                         }
@@ -620,8 +701,12 @@ fun DetailedMatchEventItem(event: MatchEvent) {
                 }
             }
 
-            // Status tag (e.g. Local, Visitante, Corregido, Anulado)
-            EventStatusChip(status = event.status)
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                if (event.status.lowercase() == "corregido" || event.status.lowercase() == "anulado") {
+                    EventStatusChip(status = event.status)
+                }
+                EventStatusChip(status = event.team)
+            }
         }
     }
 }

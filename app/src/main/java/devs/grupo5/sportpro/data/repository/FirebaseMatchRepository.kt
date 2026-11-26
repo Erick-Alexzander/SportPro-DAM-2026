@@ -1,29 +1,27 @@
 package devs.grupo5.sportpro.data.repository
 
+import android.util.Log
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
-import com.google.firebase.firestore.SetOptions
 import devs.grupo5.sportpro.data.model.AiSummary
 import devs.grupo5.sportpro.data.model.Match
 import devs.grupo5.sportpro.data.model.MatchEvent
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 
 class FirebaseMatchRepository private constructor() : MatchRepository {
 
     private val auth = FirebaseAuth.getInstance()
     private val firestore = FirebaseFirestore.getInstance()
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     private val _matches = MutableStateFlow<List<Match>>(emptyList())
     override val matches: StateFlow<List<Match>> = _matches.asStateFlow()
+
+    private val _syncError = MutableStateFlow<String?>(null)
+    override val syncError: StateFlow<String?> = _syncError.asStateFlow()
 
     private var matchesListener: ListenerRegistration? = null
 
@@ -44,9 +42,16 @@ class FirebaseMatchRepository private constructor() : MatchRepository {
         matchesListener = firestore.collection("matches")
             .whereEqualTo("ownerUid", uid)
             .addSnapshotListener { snapshot, error ->
-                if (error != null || snapshot == null) return@addSnapshotListener
-                _matches.value = snapshot.documents.mapNotNull { doc ->
-                    doc.toObject(Match::class.java)?.copy(id = doc.id)
+                if (error != null) {
+                    _syncError.value = error.message
+                    return@addSnapshotListener
+                }
+                if (snapshot != null) {
+                    _syncError.value = null
+                    val list = snapshot.documents.mapNotNull { doc ->
+                        doc.toObject(Match::class.java)?.copy(id = doc.id)
+                    }
+                    _matches.value = list
                 }
             }
     }
@@ -54,118 +59,228 @@ class FirebaseMatchRepository private constructor() : MatchRepository {
     private fun stopListening() {
         matchesListener?.remove()
         matchesListener = null
+        _syncError.value = null
     }
 
-    override fun getMatchById(id: String): Match? = _matches.value.find { it.id == id }
+    override fun getMatchById(id: String): Match? {
+        return _matches.value.find { it.id == id }
+    }
 
-    override fun addMatch(match: Match) {
-        val uid = auth.currentUser?.uid ?: return
-        val docRef = firestore.collection("matches").document()
-        val newMatch = match.copy(
-            id = docRef.id,
-            ownerUid = uid,
-            status = "Programado",
-            homeScore = 0,
-            awayScore = 0,
-            currentMinute = 0,
-            isPaused = false,
-            events = emptyList(),
-            aiSummary = null
-        )
-        _matches.value = _matches.value + newMatch
-        scope.launch {
-            try {
-                docRef.set(newMatch).await()
-            } catch (_: Exception) {
+    override suspend fun addMatch(match: Match): Result<Unit> {
+        val uid = auth.currentUser?.uid ?: return Result.failure(Exception("Usuario no autenticado"))
+
+        return try {
+            val docRef = firestore.collection("matches").document()
+
+            // Validación de pre-requisitos de integridad
+            val teamSnapshot = firestore.collection("teams").document(match.teamId).get().await()
+            if (!teamSnapshot.exists()) {
+                throw Exception("El equipo no existe")
             }
+            if (teamSnapshot.getString("ownerUid") != uid) {
+                throw Exception("No tienes permisos para usar este equipo")
+            }
+
+            val finalMatch = match.copy(
+                id = docRef.id,
+                ownerUid = uid
+            )
+
+            Log.d("MatchRepository", "Intentando guardar partido. ID=${finalMatch.id}, ownerUid=${finalMatch.ownerUid}, teamId=${finalMatch.teamId}, isHome=${finalMatch.isHome}, status=${finalMatch.status}")
+
+            docRef.set(finalMatch).await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
         }
     }
 
-    override fun updateMatch(match: Match) {
-        val uid = auth.currentUser?.uid ?: return
-        if (match.id.isBlank()) return
-        val current = getMatchById(match.id)
-        val updated = match.copy(ownerUid = uid)
-        _matches.value = _matches.value.map { if (it.id == updated.id) updated else it }
-        persistChangedFields(current, updated)
-    }
+    override suspend fun updateMatch(match: Match): Result<Unit> {
+        val uid = auth.currentUser?.uid ?: return Result.failure(Exception("Usuario no autenticado"))
 
-    override fun addMatchEvent(matchId: String, event: MatchEvent): Match? {
-        var updatedMatch: Match? = null
-        var newEvent: MatchEvent? = null
-        _matches.value = _matches.value.map { match ->
-            if (match.id == matchId) {
-                val ev = if (event.id.isEmpty()) event.copy(id = "e_${System.currentTimeMillis()}") else event
-                newEvent = ev
-                val updatedEvents = match.events + ev
-
-                var newHomeScore = match.homeScore ?: 0
-                var newAwayScore = match.awayScore ?: 0
-                if (ev.eventType.equals("Gol", ignoreCase = true)) {
-                    if (ev.team == "Local") newHomeScore += 1 else newAwayScore += 1
+        return try {
+            val docRef = firestore.collection("matches").document(match.id)
+            firestore.runTransaction { transaction ->
+                val snapshot = transaction.get(docRef)
+                if (!snapshot.exists()) {
+                    throw Exception("El partido no existe")
+                }
+                if (snapshot.getString("ownerUid") != uid) {
+                    throw Exception("No tienes permisos para modificar este partido")
                 }
 
-                val m = match.copy(
+                transaction.set(docRef, match)
+            }.await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    override suspend fun addMatchEvent(matchId: String, event: MatchEvent): Result<Match?> {
+        val uid = auth.currentUser?.uid ?: return Result.failure(Exception("Usuario no autenticado"))
+
+        return try {
+            var updatedMatch: Match? = null
+            val docRef = firestore.collection("matches").document(matchId)
+
+            firestore.runTransaction { transaction ->
+                val snapshot = transaction.get(docRef)
+                if (!snapshot.exists()) {
+                    throw Exception("El partido no existe")
+                }
+                if (snapshot.getString("ownerUid") != uid) {
+                    throw Exception("No tienes permisos para modificar este partido")
+                }
+
+                val currentMatch = snapshot.toObject(Match::class.java) ?: throw Exception("Datos inválidos")
+                if (currentMatch.status == "Finalizado") {
+                    throw Exception("El partido ya está finalizado. No admite más eventos.")
+                }
+
+                // Evitamos procesar eventos duplicados mediante un ID estable
+                val newEvent = if (event.id.isEmpty()) event.copy(id = "e_${System.currentTimeMillis()}") else event
+                if (currentMatch.events.any { it.id == newEvent.id }) {
+                    updatedMatch = currentMatch
+                    return@runTransaction
+                }
+
+                val updatedEvents = currentMatch.events + newEvent
+
+                // Evaluar cambios en marcador de forma atómica
+                var newHomeScore = currentMatch.homeScore ?: 0
+                var newAwayScore = currentMatch.awayScore ?: 0
+
+                if (newEvent.eventType.equals("Gol", ignoreCase = true)) {
+                    if (newEvent.team == "Local" || (currentMatch.isHome && newEvent.team == "SportPro (Local)")) {
+                        newHomeScore += 1
+                    } else {
+                        newAwayScore += 1
+                    }
+                }
+
+                // Generamos la versión final atómica
+                val nextMatchState = currentMatch.copy(
                     events = updatedEvents,
                     homeScore = newHomeScore,
                     awayScore = newAwayScore
                 )
-                updatedMatch = m
-                m
-            } else match
+
+                transaction.update(docRef, mapOf(
+                    "events" to nextMatchState.events,
+                    "homeScore" to nextMatchState.homeScore,
+                    "awayScore" to nextMatchState.awayScore
+                ))
+
+                updatedMatch = nextMatchState
+            }.await()
+            Result.success(updatedMatch)
+        } catch (e: Exception) {
+            Result.failure(e)
         }
-        val m = updatedMatch
-        val ev = newEvent
-        if (m != null && ev != null) {
-            val data = hashMapOf<String, Any?>("events" to m.events)
-            if (ev.eventType.equals("Gol", ignoreCase = true)) {
-                if (ev.team == "Local") data["homeScore"] = m.homeScore else data["awayScore"] = m.awayScore
-            }
-            persistFields(matchId, data)
-        }
-        return updatedMatch
     }
 
-    override fun updateMatchScore(matchId: String, homeScore: Int, awayScore: Int) {
-        _matches.value = _matches.value.map { match ->
-            if (match.id == matchId) match.copy(homeScore = homeScore, awayScore = awayScore) else match
+    override suspend fun updateMatchScore(matchId: String, homeScore: Int, awayScore: Int): Result<Unit> {
+        val uid = auth.currentUser?.uid ?: return Result.failure(Exception("Usuario no autenticado"))
+        return try {
+            val docRef = firestore.collection("matches").document(matchId)
+            firestore.runTransaction { transaction ->
+                val snapshot = transaction.get(docRef)
+                if (snapshot.exists() && snapshot.getString("ownerUid") == uid) {
+                    transaction.update(docRef, mapOf(
+                        "homeScore" to homeScore,
+                        "awayScore" to awayScore
+                    ))
+                } else {
+                    throw Exception("No autorizado")
+                }
+            }.await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
         }
-        persistFields(matchId, hashMapOf("homeScore" to homeScore, "awayScore" to awayScore))
     }
 
-    override fun toggleMatchPause(matchId: String) {
-        var newValue: Boolean? = null
-        _matches.value = _matches.value.map { match ->
-            if (match.id == matchId) {
-                val paused = !match.isPaused
-                newValue = paused
-                match.copy(isPaused = paused)
-            } else match
+    override suspend fun startMatch(matchId: String): Result<Match?> {
+        val uid = auth.currentUser?.uid ?: return Result.failure(Exception("Usuario no autenticado"))
+        return try {
+            var updated: Match? = null
+            val docRef = firestore.collection("matches").document(matchId)
+            firestore.runTransaction { transaction ->
+                val snapshot = transaction.get(docRef)
+                if (snapshot.exists() && snapshot.getString("ownerUid") == uid) {
+                    val status = snapshot.getString("status")
+                    if (status != "Programado") {
+                        throw Exception("El partido no está programado.")
+                    }
+                    transaction.update(docRef, "status", "En vivo")
+                    val currentMatch = snapshot.toObject(Match::class.java)
+                    updated = currentMatch?.copy(status = "En vivo")
+                } else {
+                    throw Exception("No autorizado")
+                }
+            }.await()
+            Result.success(updated)
+        } catch (e: Exception) {
+            Result.failure(e)
         }
-        newValue?.let { persistFields(matchId, hashMapOf("isPaused" to it)) }
     }
 
-    override fun updateMatchMinute(matchId: String, minute: Int) {
-        _matches.value = _matches.value.map { match ->
-            if (match.id == matchId) match.copy(currentMinute = minute) else match
+    override suspend fun toggleMatchPause(matchId: String): Result<Unit> {
+        val uid = auth.currentUser?.uid ?: return Result.failure(Exception("Usuario no autenticado"))
+        return try {
+            val docRef = firestore.collection("matches").document(matchId)
+            firestore.runTransaction { transaction ->
+                val snapshot = transaction.get(docRef)
+                if (snapshot.exists() && snapshot.getString("ownerUid") == uid) {
+                    val currentPause = snapshot.getBoolean("isPaused") ?: false
+                    transaction.update(docRef, "isPaused", !currentPause)
+                } else {
+                    throw Exception("No autorizado")
+                }
+            }.await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
         }
-        persistFields(matchId, hashMapOf("currentMinute" to minute))
     }
 
-    override fun finishMatch(matchId: String): Match? {
-        var updated: Match? = null
-        _matches.value = _matches.value.map { match ->
-            if (match.id == matchId) {
-                val m = match.copy(status = "Finalizado")
-                updated = m
-                m
-            } else match
+    override suspend fun updateMatchMinute(matchId: String, minute: Int): Result<Unit> {
+        // PRECAUCIÓN DE SEGURIDAD: Llamadas masivas cada segundo/minuto pueden consumir la cuota
+        val uid = auth.currentUser?.uid ?: return Result.failure(Exception("Usuario no autenticado"))
+        return try {
+            val docRef = firestore.collection("matches").document(matchId)
+            docRef.update("currentMinute", minute).await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
         }
-        persistFields(matchId, hashMapOf("status" to "Finalizado"))
-        return updated
     }
 
-    override fun generateAiSummary(matchId: String): AiSummary {
+    override suspend fun finishMatch(matchId: String): Result<Match?> {
+        val uid = auth.currentUser?.uid ?: return Result.failure(Exception("Usuario no autenticado"))
+        return try {
+            var updated: Match? = null
+            val docRef = firestore.collection("matches").document(matchId)
+            firestore.runTransaction { transaction ->
+                val snapshot = transaction.get(docRef)
+                if (snapshot.exists() && snapshot.getString("ownerUid") == uid) {
+                    transaction.update(docRef, "status", "Finalizado")
+                    val currentMatch = snapshot.toObject(Match::class.java)
+                    updated = currentMatch?.copy(status = "Finalizado")
+                } else {
+                    throw Exception("No autorizado")
+                }
+            }.await()
+            Result.success(updated)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    override suspend fun generateAiSummary(matchId: String): Result<AiSummary> {
+        // En esta etapa mantenemos la logica Mock ficticia pero adaptada a suspensión
+        // para no romper la compatibilidad actual de generación de reporte
         val match = getMatchById(matchId)
         val homeTeam = if (match?.isHome == true) "SportPro" else match?.rival ?: "Local"
         val awayTeam = if (match?.isHome == true) match.rival else "SportPro"
@@ -180,7 +295,7 @@ class FirebaseMatchRepository private constructor() : MatchRepository {
                 isApproved = false
             )
             updateAiSummary(matchId, emptySummary)
-            return emptySummary
+            return Result.success(emptySummary)
         }
 
         val validEvents = match.events.filter { !it.status.equals("Anulado", ignoreCase = true) }
@@ -248,73 +363,39 @@ class FirebaseMatchRepository private constructor() : MatchRepository {
         )
 
         updateAiSummary(matchId, generated)
-        return generated
+        return Result.success(generated)
     }
 
-    override fun updateAiSummary(matchId: String, aiSummary: AiSummary) {
-        _matches.value = _matches.value.map { match ->
-            if (match.id == matchId) match.copy(aiSummary = aiSummary) else match
-        }
-        persistFields(matchId, hashMapOf("aiSummary" to aiSummary))
-    }
-
-    override fun approveAiSummary(matchId: String) {
-        var summary: AiSummary? = null
-        _matches.value = _matches.value.map { match ->
-            if (match.id == matchId) {
-                val currentSummary = match.aiSummary ?: generateAiSummary(matchId)
-                val approved = currentSummary.copy(isApproved = true)
-                summary = approved
-                match.copy(aiSummary = approved)
-            } else match
-        }
-        summary?.let { persistFields(matchId, hashMapOf("aiSummary" to it)) }
-    }
-
-    private fun persistFields(matchId: String, data: HashMap<String, Any?>) {
-        if (data.isEmpty()) return
-        scope.launch {
-            try {
-                firestore.collection("matches").document(matchId)
-                    .set(data, SetOptions.merge())
-                    .await()
-            } catch (_: Exception) {
-            }
+    override suspend fun updateAiSummary(matchId: String, aiSummary: AiSummary): Result<Unit> {
+        val uid = auth.currentUser?.uid ?: return Result.failure(Exception("Usuario no autenticado"))
+        return try {
+            val docRef = firestore.collection("matches").document(matchId)
+            docRef.update("aiSummary", aiSummary).await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
         }
     }
 
-    private fun persistChangedFields(current: Match?, updated: Match) {
-        val data = hashMapOf<String, Any?>()
-        if (current == null) {
-            data["rival"] = updated.rival
-            data["date"] = updated.date
-            data["time"] = updated.time
-            data["stadium"] = updated.stadium
-            data["category"] = updated.category
-            data["status"] = updated.status
-            data["isHome"] = updated.isHome
-            data["homeScore"] = updated.homeScore
-            data["awayScore"] = updated.awayScore
-            data["currentMinute"] = updated.currentMinute
-            data["isPaused"] = updated.isPaused
-            data["events"] = updated.events
-            data["aiSummary"] = updated.aiSummary
-        } else {
-            if (current.rival != updated.rival) data["rival"] = updated.rival
-            if (current.date != updated.date) data["date"] = updated.date
-            if (current.time != updated.time) data["time"] = updated.time
-            if (current.stadium != updated.stadium) data["stadium"] = updated.stadium
-            if (current.category != updated.category) data["category"] = updated.category
-            if (current.status != updated.status) data["status"] = updated.status
-            if (current.isHome != updated.isHome) data["isHome"] = updated.isHome
-            if (current.homeScore != updated.homeScore) data["homeScore"] = updated.homeScore
-            if (current.awayScore != updated.awayScore) data["awayScore"] = updated.awayScore
-            if (current.currentMinute != updated.currentMinute) data["currentMinute"] = updated.currentMinute
-            if (current.isPaused != updated.isPaused) data["isPaused"] = updated.isPaused
-            if (current.events != updated.events) data["events"] = updated.events
-            if (current.aiSummary != updated.aiSummary) data["aiSummary"] = updated.aiSummary
+    override suspend fun approveAiSummary(matchId: String): Result<Unit> {
+        val uid = auth.currentUser?.uid ?: return Result.failure(Exception("Usuario no autenticado"))
+        return try {
+            val docRef = firestore.collection("matches").document(matchId)
+            firestore.runTransaction { transaction ->
+                val snapshot = transaction.get(docRef)
+                if (snapshot.exists() && snapshot.getString("ownerUid") == uid) {
+                    val currentMatch = snapshot.toObject(Match::class.java)
+                    if (currentMatch?.aiSummary != null) {
+                        transaction.update(docRef, "aiSummary.isApproved", true)
+                    }
+                } else {
+                    throw Exception("No autorizado")
+                }
+            }.await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
         }
-        persistFields(updated.id, data)
     }
 
     companion object {

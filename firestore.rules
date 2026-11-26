@@ -26,6 +26,12 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "PARENT";
     }
 
+    function isAdmin() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "ADMIN";
+    }
+
     function isOwner(data) {
       return signedIn() && data.ownerUid == request.auth.uid;
     }
@@ -52,7 +58,7 @@ service cloud.firestore {
         && (request.auth.uid == userId || isTrainer());
 
       // Los entrenadores necesitan buscar apoderados por correo para vincularlos sin Cloud Functions.
-      allow list: if isTrainer();
+      allow list: if isTrainer() || isAdmin();
 
       allow create: if signedIn()
         && request.auth.uid == userId
@@ -551,7 +557,7 @@ service cloud.firestore {
     }
 
     // --- MENSUALIDADES ---
-    // El apoderado solo lee las suyas y únicamente puede registrar su comprobante.
+    // El apoderado solo lee las suyas y ?nicamente puede registrar su comprobante.
     // El estado PENDIENTE/PAGADO lo define la academia: status es inmutable para el cliente.
     match /payments/{paymentId} {
       allow get, list: if signedIn()
@@ -577,7 +583,7 @@ service cloud.firestore {
     }
 
     // --- COMUNICADOS ---
-    // Lectura para apoderados/entrenadores; publicación por entrenador dueño.
+    // Lectura para apoderados/entrenadores; publicaci?n por entrenador due?o.
     match /announcements/{announcementId} {
       allow get, list: if signedIn()
         && (

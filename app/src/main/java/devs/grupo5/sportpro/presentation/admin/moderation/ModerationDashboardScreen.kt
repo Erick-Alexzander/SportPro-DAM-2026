@@ -21,6 +21,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
+import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -64,6 +65,7 @@ val DangerColor = Color(0xFFD50000)
 @Composable
 fun ModerationDashboardScreen(
     onLogoutClick: () -> Unit,
+    onPaymentsClick: () -> Unit = {},
     reportRepository: devs.grupo5.sportpro.data.repository.ReportRepository = MockReportRepository.instance,
     adminUid: String = "admin_uid"
 ) {
@@ -104,8 +106,13 @@ fun ModerationDashboardScreen(
                             color = Color.White
                         )
                     }
-                    IconButton(onClick = onLogoutClick) {
-                        Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = "Salir", tint = Color.Gray)
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        IconButton(onClick = onPaymentsClick) {
+                            Icon(Icons.Default.CreditCard, contentDescription = "Pagos", tint = Color.Gray)
+                        }
+                        IconButton(onClick = onLogoutClick) {
+                            Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = "Salir", tint = Color.Gray)
+                        }
                     }
                 }
 

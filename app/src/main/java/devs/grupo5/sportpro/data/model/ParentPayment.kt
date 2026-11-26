@@ -39,3 +39,14 @@ data class ParentPayment(
     val updatedAt: LocalDateTime = LocalDateTime.now(),
     val updatedBy: String = ""
 )
+
+
+/**
+ * Modelo legado usado por el flujo de pagos/admin incorporado desde main.
+ * Se mantiene para compatibilidad de compilaci?n con FirebasePaymentRepository.
+ */
+data class MonthlyPayment(
+    val period: String = currentPaymentPeriod(),
+    val status: PaymentStatus = PaymentStatus.PENDIENTE,
+    val receiptRegistered: Boolean = false
+)

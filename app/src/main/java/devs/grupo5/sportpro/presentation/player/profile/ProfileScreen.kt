@@ -30,6 +30,8 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.Link
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -70,6 +72,7 @@ import devs.grupo5.sportpro.presentation.player.theme.PlayerTextMuted
 import devs.grupo5.sportpro.presentation.player.theme.PlayerTextPrimary
 import devs.grupo5.sportpro.presentation.player.theme.PlayerTextSecondary
 import devs.grupo5.sportpro.presentation.player.theme.PlayerWarning
+import devs.grupo5.sportpro.presentation.player.link.LinkPlayerClaimDialog
 import devs.grupo5.sportpro.presentation.player.theme.SportProPlayerTheme
 
 @Composable
@@ -95,6 +98,7 @@ fun ProfileScreen(
     onTabSelected: (PlayerTab) -> Unit = {}
 ) {
     var showShareDialog by remember { mutableStateOf(false) }
+    var showLinkDialog by remember { mutableStateOf(false) }
 
     val displayName = fullName.ifBlank { "—" }
     val displayEmail = email.ifBlank { "—" }
@@ -110,6 +114,10 @@ fun ProfileScreen(
         academy.takeIf { it.isNotBlank() },
         category.takeIf { it.isNotBlank() }
     ).filterNotNull().joinToString(" · ")
+
+    if (showLinkDialog) {
+        LinkPlayerClaimDialog(onDismiss = { showLinkDialog = false })
+    }
 
     if (showShareDialog) {
         ShareProfileDialog(
@@ -187,6 +195,13 @@ fun ProfileScreen(
 
                 item {
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        SettingsOptionItem(
+                            icon = Icons.Default.Link,
+                            title = "Vincular ficha deportiva",
+                            subtitle = "Ingresa un código proveído por tu club",
+                            iconTint = PlayerNeonGreen,
+                            onClick = { showLinkDialog = true }
+                        )
                         SettingsOptionItem(
                             icon = Icons.Default.Edit,
                             title = "Editar perfil",
@@ -851,7 +866,8 @@ private fun SettingsOptionItem(
     icon: ImageVector,
     title: String,
     subtitle: String,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    iconTint: Color = PlayerTextSecondary
 ) {
     Card(
         modifier = Modifier
@@ -877,7 +893,7 @@ private fun SettingsOptionItem(
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
-                    tint = PlayerNeonGreen,
+                    tint = iconTint,
                     modifier = Modifier.size(22.dp)
                 )
             }

@@ -212,16 +212,24 @@ fun AiSummaryScreen(
                 )
 
                 AiSummaryStep.RESULT -> {
-                    val summary = match.aiSummary ?: viewModel.generateAiSummary(match.id)
-                    AiSummaryResultContent(
-                        summary = summary,
-                        onBackClick = onBackClick,
-                        onEditClick = { isEditingModalOpen = true },
-                        onApproveClick = {
-                            viewModel.approveAiSummary(match.id)
-                            currentStep = AiSummaryStep.APPROVED
+                    // Fallback visual content, generation is now async
+                    val summaryResult = match.aiSummary
+                    if (summaryResult != null) {
+                        AiSummaryResultContent(
+                            summary = summaryResult,
+                            onBackClick = onBackClick,
+                            onEditClick = { isEditingModalOpen = true },
+                            onApproveClick = {
+                                viewModel.approveAiSummary(match.id)
+                                currentStep = AiSummaryStep.APPROVED
+                            }
+                        )
+                    } else {
+                        // In case of async delay
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator(color = SportProGreen)
                         }
-                    )
+                    }
                 }
 
                 AiSummaryStep.APPROVED -> AiSummaryApprovedContent(

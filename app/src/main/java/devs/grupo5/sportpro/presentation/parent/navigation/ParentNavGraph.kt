@@ -8,6 +8,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -20,6 +21,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import devs.grupo5.sportpro.data.model.LinkedChild
 import devs.grupo5.sportpro.data.model.currentPaymentPeriod
+import devs.grupo5.sportpro.data.repository.ChildLinkResult
 import devs.grupo5.sportpro.data.repository.FirebaseParentRepository
 import devs.grupo5.sportpro.data.repository.ParentRepository
 import devs.grupo5.sportpro.presentation.auth.AuthViewModel
@@ -41,6 +43,7 @@ import devs.grupo5.sportpro.presentation.parent.dialogs.SimpleInfoDialog
 import devs.grupo5.sportpro.presentation.parent.profile.ParentProfileScreen
 import devs.grupo5.sportpro.presentation.parent.theme.ParentBackground
 import devs.grupo5.sportpro.presentation.parent.theme.SportProParentTheme
+import kotlinx.coroutines.launch
 
 object ParentRoutes {
     const val HOME = "parent_home"
@@ -235,14 +238,22 @@ fun ParentMainContainerScreen(
     if (showChildDialog) {
         RegisterChildDialog(
             initialChild = childDialogTarget,
-            onDismiss = { showChildDialog = false },
+            onDismiss = {
+                showChildDialog = false
+                childDialogTarget = null
+            },
             onSave = { child ->
-                if (childDialogTarget == null) {
+                val result = if (childDialogTarget == null) {
                     parentRepository.linkChild(child)
                 } else {
                     parentRepository.updateChild(child)
+                    ChildLinkResult.Success
                 }
-                showChildDialog = false
+                if (result is ChildLinkResult.Success) {
+                    showChildDialog = false
+                    childDialogTarget = null
+                }
+                result
             }
         )
     }

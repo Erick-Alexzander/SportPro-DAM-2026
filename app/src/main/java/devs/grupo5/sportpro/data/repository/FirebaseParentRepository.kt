@@ -296,12 +296,13 @@ class FirebaseParentRepository private constructor(private val appContext: Conte
             .addOnFailureListener { error -> Log.w(TAG, "No se pudo actualizar el perfil", error) }
     }
 
-    override fun linkChild(child: LinkedChild) {
-        // No se escribe en Firestore: la vinculación la aprueba la academia (punto 4).
+    override fun linkChild(child: LinkedChild): ChildLinkResult {
+        // No se escribe en Firestore: la vinculaci?n la aprueba la academia.
         localChildren = localChildren.filterNot { it.id == child.id } + child
         hiddenChildIds = hiddenChildIds - child.id
         recomputeChildren()
         persistLocalChildren()
+        return ChildLinkResult.Success
     }
 
     override fun updateChild(child: LinkedChild) {
@@ -613,6 +614,29 @@ class FirebaseParentRepository private constructor(private val appContext: Conte
             place = stadium,
             category = category
         )
+    }
+
+    override fun clear() {
+        listeners.forEach { it.remove() }
+        listeners.clear()
+        calendarListeners.forEach { it.remove() }
+        calendarListeners.clear()
+        parentUid = ""
+        remoteChildren = emptyList()
+        localChildren = emptyList()
+        hiddenChildIds = emptySet()
+        readAnnouncementIds = emptySet()
+        readNotificationIds = emptySet()
+        remoteAnnouncements = emptyList()
+        remoteTrainings = emptyList()
+        remoteMatches = emptyList()
+        _guardian.value = GuardianProfile()
+        _linkedChildren.value = emptyList()
+        _selectedChildId.value = null
+        _payments.value = emptyList()
+        _announcements.value = emptyList()
+        _calendarEvents.value = emptyList()
+        _notifications.value = emptyList()
     }
 
     companion object {
