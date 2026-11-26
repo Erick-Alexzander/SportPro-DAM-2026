@@ -22,6 +22,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Groups
+import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material3.AlertDialog
@@ -51,6 +52,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import devs.grupo5.sportpro.presentation.trainer.players.ManageGuardianDialog
 import devs.grupo5.sportpro.presentation.trainer.theme.SportProCardBackground
 import devs.grupo5.sportpro.presentation.trainer.theme.SportProCardBorder
 import devs.grupo5.sportpro.presentation.trainer.theme.SportProDarkBackground
@@ -75,6 +77,7 @@ fun TeamDetailScreen(
 
     var selectedTabIndex by remember { mutableStateOf(0) }
     var showAddPlayerDialog by remember { mutableStateOf(false) }
+    var selectedGuardianPlayerId by remember { mutableStateOf<String?>(null) }
 
     val tabs = listOf("Jugadores", "Entrenamientos", "Partidos")
 
@@ -93,6 +96,9 @@ fun TeamDetailScreen(
     val teamPlayers = viewModel.getTeamPlayers(team)
     val teamTrainings = viewModel.getTeamTrainings(team.id)
     val teamMatches = viewModel.getTeamMatches(team.id)
+    val selectedGuardianPlayer = selectedGuardianPlayerId?.let { id ->
+        teamPlayers.find { it.id == id } ?: availablePlayers.find { it.id == id }
+    }
 
     Column(
         modifier = Modifier
@@ -286,14 +292,25 @@ fun TeamDetailScreen(
                                     }
                                 }
 
-                                IconButton(
-                                    onClick = { viewModel.removePlayerFromTeam(team.id, player.id) }
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Delete,
-                                        contentDescription = "Remover",
-                                        tint = SportProError.copy(alpha = 0.8f)
-                                    )
+                                Row {
+                                    IconButton(
+                                        onClick = { selectedGuardianPlayerId = player.id }
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Link,
+                                            contentDescription = "Gestionar apoderado",
+                                            tint = SportProGreen
+                                        )
+                                    }
+                                    IconButton(
+                                        onClick = { viewModel.removePlayerFromTeam(team.id, player.id) }
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Delete,
+                                            contentDescription = "Remover",
+                                            tint = SportProError.copy(alpha = 0.8f)
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -379,6 +396,13 @@ fun TeamDetailScreen(
                 }
             }
         }
+    }
+
+    selectedGuardianPlayer?.let { player ->
+        ManageGuardianDialog(
+            player = player,
+            onDismiss = { selectedGuardianPlayerId = null }
+        )
     }
 
     // Modal de Agregar Jugador: Ofrece Registrar Nuevo Jugador O Seleccionar Existente

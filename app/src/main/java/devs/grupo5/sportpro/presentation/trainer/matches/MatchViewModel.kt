@@ -7,9 +7,9 @@ import devs.grupo5.sportpro.data.model.MatchEvent
 import devs.grupo5.sportpro.data.model.Post
 import devs.grupo5.sportpro.data.model.Team
 import devs.grupo5.sportpro.data.repository.CommunityRepository
+import devs.grupo5.sportpro.data.repository.FirebaseMatchRepository
 import devs.grupo5.sportpro.data.repository.MatchRepository
 import devs.grupo5.sportpro.data.repository.MockCommunityRepository
-import devs.grupo5.sportpro.data.repository.MockMatchRepository
 import devs.grupo5.sportpro.data.repository.MockTeamRepository
 import devs.grupo5.sportpro.data.repository.MockPlayerRepository
 import devs.grupo5.sportpro.data.repository.PlayerRepository
@@ -19,7 +19,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 class MatchViewModel(
-    private val matchRepository: MatchRepository = MockMatchRepository.instance,
+    private val matchRepository: MatchRepository = FirebaseMatchRepository.instance,
     private val teamRepository: TeamRepository = MockTeamRepository.instance,
     private val communityRepository: CommunityRepository = MockCommunityRepository.instance,
     private val playerRepository: PlayerRepository = MockPlayerRepository.instance

@@ -4,6 +4,10 @@ data class Player(
     val id: String = "",
     val ownerUid: String = "",
     val teamId: String? = null,
+    /** Uids de los apoderados autorizados a leer este jugador. Lo gestiona el entrenador. */
+    val guardianUids: List<String> = emptyList(),
+    /** UID de Firebase Auth del menor, si tiene cuenta propia. */
+    val linkedAuthId: String? = null,
     val fullName: String = "",
     val category: String = "", // "Primera", "Sub-15", "Sub-10"
     val position: String = "", // "POR", "DEF", "MED", "DEL"

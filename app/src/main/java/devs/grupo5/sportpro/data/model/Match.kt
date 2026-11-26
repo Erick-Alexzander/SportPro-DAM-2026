@@ -22,6 +22,7 @@ data class AiSummary(
 
 data class Match(
     val id: String = "",
+    val ownerUid: String = "",
     val teamId: String = "",
     val rival: String = "",
     val date: String = "",
@@ -30,9 +31,9 @@ data class Match(
     val category: String = "", // "Primera", "Sub-15", "Sub-10"
     val status: String = "Programado", // "Programado", "En vivo", "Finalizado"
     val isHome: Boolean = true, // true: Local, false: Visitante
-    val homeScore: Int? = null,
-    val awayScore: Int? = null,
-    val currentMinute: Int = 68,
+    val homeScore: Int? = 0,
+    val awayScore: Int? = 0,
+    val currentMinute: Int = 0,
     val isPaused: Boolean = false,
     val events: List<MatchEvent> = emptyList(),
     val aiSummary: AiSummary? = null

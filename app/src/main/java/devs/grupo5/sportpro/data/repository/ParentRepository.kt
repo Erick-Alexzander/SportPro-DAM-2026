@@ -1,15 +1,17 @@
 package devs.grupo5.sportpro.data.repository
 
 import android.content.Context
+import devs.grupo5.sportpro.data.model.AnnouncementAudience
 import devs.grupo5.sportpro.data.model.ChildStats
 import devs.grupo5.sportpro.data.model.GuardianProfile
 import devs.grupo5.sportpro.data.model.GuardianTitle
 import devs.grupo5.sportpro.data.model.LinkedChild
-import devs.grupo5.sportpro.data.model.MonthlyPayment
+import devs.grupo5.sportpro.data.model.ParentAnnouncement
 import devs.grupo5.sportpro.data.model.ParentNotification
-import devs.grupo5.sportpro.data.model.PaymentStatus
+import devs.grupo5.sportpro.data.model.ParentPayment
 import devs.grupo5.sportpro.data.model.UserProfile
 import devs.grupo5.sportpro.data.model.currentPaymentPeriod
+import devs.grupo5.sportpro.presentation.parent.calendar.ParentEvent
 import java.time.LocalDateTime
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -24,7 +26,15 @@ interface ParentRepository {
     /** Identificador del menor que se está visualizando en el módulo. */
     val selectedChildId: StateFlow<String?>
 
-    val payment: StateFlow<MonthlyPayment>
+    /** Mensualidades de todos los menores y períodos conocidos. */
+    val payments: StateFlow<List<ParentPayment>>
+
+    /** Comunicados visibles para el apoderado. */
+    val announcements: StateFlow<List<ParentAnnouncement>>
+
+    /** Eventos de calendario (entrenamientos/partidos) de los equipos vinculados. */
+    val calendarEvents: StateFlow<List<ParentEvent>>
+
     val notifications: StateFlow<List<ParentNotification>>
 
     val unreadNotifications: Int
@@ -47,10 +57,13 @@ interface ParentRepository {
     /** Cambia el menor visible en el módulo. */
     fun selectChild(childId: String)
 
-    fun updatePaymentStatus(status: PaymentStatus)
+    /**
+     * Registra el comprobante de pago del período actual. El estado PENDIENTE/PAGADO lo
+     * define la academia, por eso no existe una acción para cambiarlo desde el apoderado.
+     */
+    fun registerReceipt(playerId: String)
 
-    /** Registra el comprobante de pago enviado por el apoderado. */
-    fun registerReceipt()
+    fun markAnnouncementAsRead(announcementId: String)
 
     fun markNotificationsAsRead()
 }
@@ -58,8 +71,9 @@ interface ParentRepository {
 class MockParentRepository private constructor(
     private val context: Context? = null
 ) : ParentRepository {
-    
+
     private var storage: ParentStorage? = null
+    private var parentUid: String = ""
 
     private val _guardian = MutableStateFlow(
         GuardianProfile(
@@ -101,13 +115,14 @@ class MockParentRepository private constructor(
     private val _selectedChildId = MutableStateFlow<String?>("lc_1")
     override val selectedChildId: StateFlow<String?> = _selectedChildId.asStateFlow()
 
-    private val _payment = MutableStateFlow(
-        MonthlyPayment(
-            status = PaymentStatus.PENDIENTE,
-            receiptRegistered = false
-        )
-    )
-    override val payment: StateFlow<MonthlyPayment> = _payment.asStateFlow()
+    private val _payments = MutableStateFlow<List<ParentPayment>>(emptyList())
+    override val payments: StateFlow<List<ParentPayment>> = _payments.asStateFlow()
+
+    private val _announcements = MutableStateFlow<List<ParentAnnouncement>>(emptyList())
+    override val announcements: StateFlow<List<ParentAnnouncement>> = _announcements.asStateFlow()
+
+    private val _calendarEvents = MutableStateFlow<List<ParentEvent>>(emptyList())
+    override val calendarEvents: StateFlow<List<ParentEvent>> = _calendarEvents.asStateFlow()
 
     private val _notifications = MutableStateFlow(defaultNotifications())
     override val notifications: StateFlow<List<ParentNotification>> = _notifications.asStateFlow()
@@ -118,6 +133,7 @@ class MockParentRepository private constructor(
 
     override fun initFrom(user: UserProfile) {
         val uid = user.uid.ifBlank { "anonymous" }
+        parentUid = uid
         context?.let { ctx ->
             storage = ParentStorage(ctx, uid)
         }
@@ -134,12 +150,16 @@ class MockParentRepository private constructor(
                 ?.takeIf { id -> storedChildren.any { it.id == id } }
                 ?: storedChildren.first().id
         }
-        val storedPayment = store?.loadPayment()
-        _payment.value = if (storedPayment == null || storedPayment.period != currentPaymentPeriod()) {
-            MonthlyPayment().also { store?.savePayment(it) }
-        } else {
-            storedPayment
+
+        val storedPayments = store?.loadPayments(storedChildren.firstOrNull()?.id).orEmpty()
+        _payments.value = ensureCurrentPayments(storedChildren, storedPayments)
+        store?.savePayments(_payments.value)
+
+        val storedAnnouncements = store?.loadAnnouncements()
+        _announcements.value = storedAnnouncements ?: defaultAnnouncements().also {
+            store?.saveAnnouncements(it)
         }
+
         val storedNotifications = store?.loadNotifications().orEmpty()
         _notifications.value = if (storedNotifications.isEmpty()) {
             defaultNotifications().also { store?.saveNotifications(it) }
@@ -153,6 +173,41 @@ class MockParentRepository private constructor(
             email = user.email.ifBlank { _guardian.value.email }
         )
         store?.saveGuardian(_guardian.value)
+    }
+
+    /** Garantiza una mensualidad del período actual por cada menor vinculado. */
+    private fun ensureCurrentPayments(
+        children: List<LinkedChild>,
+        existing: List<ParentPayment>
+    ): List<ParentPayment> {
+        val period = currentPaymentPeriod()
+        val known = existing.filter { payment -> children.any { it.id == payment.playerId } }
+        val missing = children
+            .filter { child -> known.none { it.playerId == child.id && it.period == period } }
+            .map { newPayment(it.id) }
+        return (known + missing)
+            .distinctBy { "${it.playerId}_${it.period}" }
+            .sortedWith(compareBy({ it.playerId }, { it.period }))
+    }
+
+    private fun newPayment(playerId: String): ParentPayment {
+        val period = currentPaymentPeriod()
+        return ParentPayment(
+            id = "${parentUid}_${playerId}_$period",
+            parentUid = parentUid,
+            playerId = playerId,
+            period = period,
+            updatedAt = LocalDateTime.now(),
+            updatedBy = parentUid
+        )
+    }
+
+    private fun persistPayments() {
+        storage?.savePayments(_payments.value)
+    }
+
+    private fun persistAnnouncements() {
+        storage?.saveAnnouncements(_announcements.value)
     }
 
     private fun defaultNotifications(now: LocalDateTime = LocalDateTime.now()): List<ParentNotification> =
@@ -177,6 +232,39 @@ class MockParentRepository private constructor(
             )
         ).sortedByDescending { it.createdAt }
 
+    /** Comunicados de ejemplo con el esquema final; se reemplazarán por Firestore. */
+    private fun defaultAnnouncements(now: LocalDateTime = LocalDateTime.now()): List<ParentAnnouncement> =
+        listOf(
+            ParentAnnouncement(
+                id = "a1",
+                title = "Inicio de la segunda quincena",
+                body = "Los horarios de entrenamiento se mantienen hasta fin de mes. " +
+                    "Este sábado no hay sesión por mantenimiento de la cancha.",
+                author = "Academia SportPro",
+                audience = AnnouncementAudience.TODOS,
+                createdAt = now.minusHours(2),
+                pinned = true
+            ),
+            ParentAnnouncement(
+                id = "a2",
+                title = "Recordatorio de mensualidad",
+                body = "La mensualidad del período actual se regulariza antes del día 10. " +
+                    "Recuerda registrar el comprobante en tu panel de apoderado.",
+                author = "Administración SportPro",
+                audience = AnnouncementAudience.APODERADOS,
+                createdAt = now.minusHours(6)
+            ),
+            ParentAnnouncement(
+                id = "a3",
+                title = "Encuentro con las familias",
+                body = "El club invita a las familias a conocer al equipo Sub-15 este sábado " +
+                    "en la cancha de la academia.",
+                author = "Coach Ramírez",
+                audience = AnnouncementAudience.APODERADOS,
+                createdAt = now.minusDays(1)
+            )
+        ).sortedByDescending { it.createdAt }
+
     override fun updateGuardian(profile: GuardianProfile) {
         _guardian.value = profile
         storage?.saveGuardian(profile)
@@ -191,7 +279,12 @@ class MockParentRepository private constructor(
             current + child
         }
         _selectedChildId.value = child.id
+
+        if (_payments.value.none { it.playerId == child.id && it.period == currentPaymentPeriod() }) {
+            _payments.value = _payments.value + newPayment(child.id)
+        }
         persistChildren()
+        persistPayments()
     }
 
     override fun updateChild(child: LinkedChild) {
@@ -207,7 +300,9 @@ class MockParentRepository private constructor(
         if (_selectedChildId.value == childId) {
             _selectedChildId.value = remaining.firstOrNull()?.id
         }
+        _payments.value = _payments.value.filterNot { it.playerId == childId }
         persistChildren()
+        persistPayments()
     }
 
     override fun selectChild(childId: String) {
@@ -222,14 +317,38 @@ class MockParentRepository private constructor(
         storage?.saveSelectedChildId(_selectedChildId.value)
     }
 
-    override fun updatePaymentStatus(status: PaymentStatus) {
-        _payment.value = _payment.value.copy(status = status)
-        storage?.savePayment(_payment.value)
+    override fun registerReceipt(playerId: String) {
+        val period = currentPaymentPeriod()
+        val current = _payments.value
+        val exists = current.any { it.playerId == playerId && it.period == period }
+
+        _payments.value = if (exists) {
+            current.map { payment ->
+                if (payment.playerId == playerId && payment.period == period) {
+                    payment.copy(
+                        receiptRegistered = true,
+                        updatedAt = LocalDateTime.now(),
+                        updatedBy = parentUid
+                    )
+                } else {
+                    payment
+                }
+            }
+        } else {
+            current + newPayment(playerId).copy(
+                receiptRegistered = true,
+                updatedAt = LocalDateTime.now(),
+                updatedBy = parentUid
+            )
+        }
+        persistPayments()
     }
 
-    override fun registerReceipt() {
-        _payment.value = _payment.value.copy(receiptRegistered = true)
-        storage?.savePayment(_payment.value)
+    override fun markAnnouncementAsRead(announcementId: String) {
+        _announcements.value = _announcements.value.map { announcement ->
+            if (announcement.id == announcementId) announcement.copy(isRead = true) else announcement
+        }
+        persistAnnouncements()
     }
 
     override fun markNotificationsAsRead() {

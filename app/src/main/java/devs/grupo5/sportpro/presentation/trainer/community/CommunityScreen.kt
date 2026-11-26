@@ -21,6 +21,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.ChatBubbleOutline
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
@@ -64,7 +65,8 @@ import devs.grupo5.sportpro.presentation.trainer.theme.SportProTextSecondary
 fun CommunityScreen(
     viewModel: CommunityViewModel = viewModel(),
     authViewModel: devs.grupo5.sportpro.presentation.auth.AuthViewModel = viewModel(),
-    onCreatePostClick: () -> Unit = {}
+    onCreatePostClick: () -> Unit = {},
+    onAnnouncementsClick: () -> Unit = {}
 ) {
     val posts by viewModel.posts.collectAsState()
     val currentUser by authViewModel.currentUser.collectAsState()
@@ -86,7 +88,7 @@ fun CommunityScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = "Comunidad DT",
                         fontSize = 26.sp,
@@ -98,6 +100,14 @@ fun CommunityScreen(
                         text = "Foro y noticias del cuerpo técnico",
                         fontSize = 14.sp,
                         color = SportProTextSecondary
+                    )
+                }
+
+                IconButton(onClick = onAnnouncementsClick) {
+                    Icon(
+                        imageVector = Icons.Default.Campaign,
+                        contentDescription = "Comunicados",
+                        tint = SportProGreen
                     )
                 }
 

@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -35,7 +36,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import com.google.firebase.FirebaseApp
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -48,10 +55,9 @@ import devs.grupo5.sportpro.data.model.ChildStats
 import devs.grupo5.sportpro.data.model.GuardianProfile
 import devs.grupo5.sportpro.data.model.GuardianTitle
 import devs.grupo5.sportpro.data.model.LinkedChild
-import devs.grupo5.sportpro.data.model.MonthlyPayment
+import devs.grupo5.sportpro.data.model.ParentPayment
 import devs.grupo5.sportpro.data.model.ParentNotification
 import devs.grupo5.sportpro.data.model.MINOR_MAX_AGE
-import devs.grupo5.sportpro.data.model.PaymentStatus
 import devs.grupo5.sportpro.data.model.ageInYears
 import devs.grupo5.sportpro.data.model.formatPeruvianMobile
 import devs.grupo5.sportpro.data.model.isValidMinorBirthDate
@@ -61,7 +67,6 @@ import devs.grupo5.sportpro.data.model.normalizeBirthDate
 import devs.grupo5.sportpro.presentation.parent.components.ParentMetricTile
 import devs.grupo5.sportpro.presentation.parent.components.ParentStatusPill
 import devs.grupo5.sportpro.presentation.parent.theme.ParentBorder
-import devs.grupo5.sportpro.presentation.parent.theme.ParentEmerald
 import devs.grupo5.sportpro.presentation.parent.theme.ParentGreenContainer
 import devs.grupo5.sportpro.presentation.parent.theme.ParentNeonGreen
 import devs.grupo5.sportpro.presentation.parent.theme.ParentStatusBrown
@@ -294,10 +299,9 @@ fun EditProfileDialog(
 ) {
     var firstName by remember { mutableStateOf(profile.firstName) }
     var lastName by remember { mutableStateOf(profile.lastName) }
-    var email by remember { mutableStateOf(profile.email) }
     var showErrors by remember { mutableStateOf(false) }
 
-    val isValid = firstName.isNotBlank() && lastName.isNotBlank() && email.contains("@")
+    val isValid = firstName.isNotBlank() && lastName.isNotBlank()
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -321,26 +325,29 @@ fun EditProfileDialog(
                     label = "NOMBRE",
                     value = firstName,
                     onValueChange = { firstName = it },
-                    placeholder = "María",
+                    placeholder = "Mar?a",
                     isError = showErrors && firstName.isBlank()
                 )
                 ParentDialogField(
                     label = "APELLIDO",
                     value = lastName,
                     onValueChange = { lastName = it },
-                    placeholder = "González",
+                    placeholder = "Gonz?lez",
                     isError = showErrors && lastName.isBlank()
                 )
                 ParentDialogField(
-                    label = "CORREO ELECTRÓNICO",
-                    value = email,
-                    onValueChange = { email = it },
+                    label = "CORREO ELECTR?NICO",
+                    value = profile.email,
+                    onValueChange = {},
                     placeholder = "correo@ejemplo.com",
                     keyboardType = KeyboardType.Email,
-                    isError = showErrors && !email.contains("@")
+                    readOnly = true
                 )
-
-                // Rol visual removed since it's just Padre / Apoderado uniformly
+                Text(
+                    text = "El correo no se puede modificar desde la app.",
+                    fontSize = 11.sp,
+                    color = ParentTextMuted
+                )
             }
         },
         confirmButton = {
@@ -351,8 +358,7 @@ fun EditProfileDialog(
                         onSave(
                             profile.copy(
                                 firstName = firstName.trim(),
-                                lastName = lastName.trim(),
-                                email = email.trim()
+                                lastName = lastName.trim()
                             )
                         )
                     }
@@ -543,9 +549,8 @@ fun NotificationsDialog(
  */
 @Composable
 fun PaymentStatusDialog(
-    payment: MonthlyPayment,
+    payment: ParentPayment,
     onDismiss: () -> Unit = {},
-    onStatusChange: (PaymentStatus) -> Unit = {},
     onUploadReceipt: () -> Unit = {}
 ) {
     AlertDialog(
@@ -597,28 +602,12 @@ fun PaymentStatusDialog(
                 )
 
                 Text(
-                    text = "Actualiza el estado según el comprobante que presentaste en la academia.",
+                    text = "El estado lo actualiza la academia. Si ya pagaste, registra tu comprobante " +
+                        "para que puedan validarlo.",
                     fontSize = 12.sp,
                     color = ParentTextSecondary,
                     lineHeight = 17.sp
                 )
-
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    PaymentChoiceButton(
-                        label = "Pagado",
-                        selected = payment.status == PaymentStatus.PAGADO,
-                        selectedColor = ParentEmerald,
-                        onClick = { onStatusChange(PaymentStatus.PAGADO) },
-                        modifier = Modifier.weight(1f)
-                    )
-                    PaymentChoiceButton(
-                        label = "Pendiente",
-                        selected = payment.status == PaymentStatus.PENDIENTE,
-                        selectedColor = ParentWarning,
-                        onClick = { onStatusChange(PaymentStatus.PENDIENTE) },
-                        modifier = Modifier.weight(1f)
-                    )
-                }
 
                 Button(
                     onClick = onUploadReceipt,
@@ -1002,11 +991,14 @@ fun CreateChildAccessDialog(
     var confirmPassword by remember { mutableStateOf("") }
     var showErrors by remember { mutableStateOf(false) }
     var statusMessage by remember { mutableStateOf<String?>(null) }
+    var isSuccess by remember { mutableStateOf(false) }
+    var isLoading by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
 
     val isValid = email.isNotBlank() && email.contains("@") && password.length >= 6 && password == confirmPassword
 
     AlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = { if (!isLoading) onDismiss() },
         containerColor = ParentSurface,
         titleContentColor = ParentTextPrimary,
         textContentColor = ParentTextSecondary,
@@ -1038,7 +1030,7 @@ fun CreateChildAccessDialog(
                     keyboardType = KeyboardType.Email,
                     isError = showErrors && (!email.contains("@") || email.isBlank())
                 )
-                
+
                 ParentDialogField(
                     label = "CONTRASEÑA",
                     value = password,
@@ -1047,30 +1039,31 @@ fun CreateChildAccessDialog(
                     keyboardType = KeyboardType.Password,
                     isError = showErrors && password.length < 6
                 )
-                
+
                 ParentDialogField(
                     label = "CONFIRMAR CONTRASEÑA",
                     value = confirmPassword,
                     onValueChange = { confirmPassword = it; statusMessage = null },
-                    placeholder = "Repita la contraseña",
+                    placeholder = "Repite la contraseña",
                     keyboardType = KeyboardType.Password,
-                    isError = showErrors && password != confirmPassword
+                    isError = showErrors && (confirmPassword != password || confirmPassword.isBlank())
                 )
 
                 if (statusMessage != null) {
+                    val tone = if (isSuccess) ParentNeonGreen else ParentWarning
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(12.dp))
-                            .background(ParentWarning.copy(alpha = 0.1f))
-                            .border(1.dp, ParentWarning.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
+                            .background(tone.copy(alpha = 0.1f))
+                            .border(1.dp, tone.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
                             .padding(12.dp)
                     ) {
-                        Icon(Icons.Default.Info, contentDescription = null, tint = ParentWarning, modifier = Modifier.size(16.dp))
+                        Icon(Icons.Default.Info, contentDescription = null, tint = tone, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
                             text = statusMessage!!,
-                            color = ParentWarning,
+                            color = tone,
                             fontSize = 12.sp,
                             lineHeight = 16.sp
                         )
@@ -1080,62 +1073,98 @@ fun CreateChildAccessDialog(
         },
         confirmButton = {
             TextButton(
+                enabled = !isLoading && !isSuccess,
                 onClick = {
                     showErrors = true
-                    if (isValid) {
-                        // REQUISITO: "Indicar explícitamente qué función de backend falta."
-                        statusMessage = "Operación denegada. Falta implementar la Cloud Function autenticada en Firebase para crear cuentas sin cerrar la sesión actual del apoderado."
+                    if (!isValid) return@TextButton
+                    isLoading = true
+                    statusMessage = null
+                    isSuccess = false
+                    scope.launch {
+                        val secondaryName = "childAccount_${System.currentTimeMillis()}"
+                        var secondaryApp: FirebaseApp? = null
+                        try {
+                            val defaultApp = FirebaseApp.getInstance()
+                            secondaryApp = FirebaseApp.initializeApp(
+                                defaultApp.applicationContext,
+                                defaultApp.options,
+                                secondaryName
+                            )
+                            val secondaryAuth = FirebaseAuth.getInstance(secondaryApp)
+                            val secondaryFirestore = FirebaseFirestore.getInstance(secondaryApp)
+
+                            val trimmedEmail = email.trim().lowercase()
+                            val authResult = secondaryAuth.createUserWithEmailAndPassword(trimmedEmail, password).await()
+                            val childUid = authResult.user?.uid ?: throw IllegalStateException("No se pudo obtener el UID del menor.")
+
+                            val fullName = child.fullName.trim()
+                            val parts = fullName.split(Regex("\\s+")).filter { it.isNotBlank() }
+                            val firstName = parts.firstOrNull() ?: child.firstName
+                            val lastName = parts.drop(1).joinToString(" ").ifBlank { "SportPro" }
+
+                            secondaryFirestore.collection("users").document(childUid).set(
+                                hashMapOf(
+                                    "uid" to childUid,
+                                    "email" to trimmedEmail,
+                                    "firstName" to firstName,
+                                    "lastName" to lastName,
+                                    "role" to "PLAYER",
+                                    "birthDate" to child.birthDate,
+                                    "playerProfile" to hashMapOf(
+                                        "teamName" to "",
+                                        "position" to child.position,
+                                        "jerseyNumber" to child.jerseyNumber
+                                    )
+                                )
+                            ).await()
+
+                            FirebaseFirestore.getInstance().collection("players").document(child.id)
+                                .update("linkedAuthId", childUid)
+                                .await()
+
+                            isSuccess = true
+                            statusMessage = "Acceso creado correctamente. El menor ya puede iniciar sesión con este correo."
+                        } catch (e: Exception) {
+                            statusMessage = e.message ?: "No se pudo crear el acceso."
+                        } finally {
+                            try {
+                                secondaryApp?.let { app ->
+                                    FirebaseAuth.getInstance(app).signOut()
+                                    app.delete()
+                                }
+                            } catch (_: Exception) {
+                            }
+                            isLoading = false
+                        }
                     }
                 }
             ) {
-                Text(
-                    text = "Crear acceso",
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = ParentNeonGreen
-                )
+                if (isLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp,
+                        color = ParentNeonGreen
+                    )
+                } else {
+                    Text(
+                        text = if (isSuccess) "Creado" else "Crear acceso",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isSuccess) ParentTextMuted else ParentNeonGreen
+                    )
+                }
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
+            TextButton(enabled = !isLoading, onClick = onDismiss) {
                 Text(
-                    text = "Cancelar",
+                    text = if (isSuccess) "Cerrar" else "Cancelar",
                     fontSize = 14.sp,
                     color = ParentTextMuted
                 )
             }
         }
     )
-}
-
-@Composable
-private fun PaymentChoiceButton(
-    label: String,
-    selected: Boolean,
-    selectedColor: Color,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(12.dp))
-            .background(if (selected) selectedColor.copy(alpha = 0.15f) else ParentSurfaceVariant)
-            .border(
-                width = if (selected) 1.5.dp else 1.dp,
-                color = if (selected) selectedColor else ParentBorder,
-                shape = RoundedCornerShape(12.dp)
-            )
-            .clickable { onClick() }
-            .padding(vertical = 12.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = label,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.Bold,
-            color = if (selected) selectedColor else ParentTextSecondary
-        )
-    }
 }
 
 @Composable

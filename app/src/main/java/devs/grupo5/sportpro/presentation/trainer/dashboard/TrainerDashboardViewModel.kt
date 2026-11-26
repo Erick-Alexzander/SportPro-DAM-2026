@@ -9,8 +9,8 @@ import java.time.format.DateTimeFormatter
 import java.time.format.DateTimeParseException
 import devs.grupo5.sportpro.data.model.Match
 import devs.grupo5.sportpro.data.model.Training
+import devs.grupo5.sportpro.data.repository.FirebaseMatchRepository
 import devs.grupo5.sportpro.data.repository.MatchRepository
-import devs.grupo5.sportpro.data.repository.MockMatchRepository
 import devs.grupo5.sportpro.data.repository.FirebasePlayerRepository
 import devs.grupo5.sportpro.data.repository.FirebaseTeamRepository
 import devs.grupo5.sportpro.data.repository.FirebaseTrainingRepository
@@ -27,7 +27,7 @@ class TrainerDashboardViewModel(
     playerRepository: PlayerRepository = FirebasePlayerRepository.instance,
     trainingRepository: TrainingRepository = FirebaseTrainingRepository.instance,
     teamRepository: TeamRepository = FirebaseTeamRepository.instance,
-    matchRepository: MatchRepository = MockMatchRepository.instance
+    matchRepository: MatchRepository = FirebaseMatchRepository.instance
 ) : ViewModel() {
 
     val totalPlayersCount: StateFlow<Int> = playerRepository.players.map { it.size }.stateIn(

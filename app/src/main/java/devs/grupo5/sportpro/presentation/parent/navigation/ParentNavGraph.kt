@@ -19,7 +19,8 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import devs.grupo5.sportpro.data.model.LinkedChild
-import devs.grupo5.sportpro.data.repository.MockParentRepository
+import devs.grupo5.sportpro.data.model.currentPaymentPeriod
+import devs.grupo5.sportpro.data.repository.FirebaseParentRepository
 import devs.grupo5.sportpro.data.repository.ParentRepository
 import devs.grupo5.sportpro.presentation.auth.AuthViewModel
 import devs.grupo5.sportpro.presentation.parent.announcements.ParentAnnouncementsScreen
@@ -61,7 +62,7 @@ fun ParentMainContainerScreen(
 ) {
     val appContext = LocalContext.current.applicationContext
     val parentRepository: ParentRepository = remember(appContext) {
-        MockParentRepository.getInstance(appContext)
+        FirebaseParentRepository.getInstance(appContext)
     }
 
     val currentUser by authViewModel.currentUser.collectAsState()
@@ -70,11 +71,19 @@ fun ParentMainContainerScreen(
     val selectedChildId by parentRepository.selectedChildId.collectAsState()
     val selectedChild = linkedChildren.firstOrNull { it.id == selectedChildId }
         ?: linkedChildren.firstOrNull()
-    val payment by parentRepository.payment.collectAsState()
+    val payments by parentRepository.payments.collectAsState()
+    val announcements by parentRepository.announcements.collectAsState()
+    val calendarEvents by parentRepository.calendarEvents.collectAsState()
+    val payment = selectedChild?.let { child ->
+        payments.firstOrNull {
+            it.playerId == child.id && it.period == currentPaymentPeriod()
+        }
+    }
     val notifications by parentRepository.notifications.collectAsState()
 
     var showChildDialog by rememberSaveable { mutableStateOf(false) }
     var childDialogTarget by remember { mutableStateOf<LinkedChild?>(null) }
+    var showLinkInfoDialog by rememberSaveable { mutableStateOf(false) }
     var showEditProfileDialog by rememberSaveable { mutableStateOf(false) }
     var showNotificationsDialog by rememberSaveable { mutableStateOf(false) }
     var showPaymentDialog by rememberSaveable { mutableStateOf(false) }
@@ -130,12 +139,9 @@ fun ParentMainContainerScreen(
                         payment = payment,
                         unreadNotifications = notifications.count { !it.isRead },
                         onNotificationsClick = { showNotificationsDialog = true },
-                        onRegisterChildClick = {
-                            childDialogTarget = null
-                            showChildDialog = true
-                        },
+                        onRegisterChildClick = { showLinkInfoDialog = true },
                         onSelectChild = { parentRepository.selectChild(it) },
-                        onPaymentClick = { showPaymentDialog = true },
+                        onPaymentClick = { if (payment != null) showPaymentDialog = true },
                         onChildTabClick = { navController.navigate(ParentRoutes.CHILD) },
                         onCalendarTabClick = { navController.navigate(ParentRoutes.CALENDAR) },
                         onAnnouncementsTabClick = { navController.navigate(ParentRoutes.ANNOUNCEMENTS) }
@@ -148,10 +154,7 @@ fun ParentMainContainerScreen(
                         selectedChild = selectedChild,
                         guardian = guardian,
                         onSelectChild = { parentRepository.selectChild(it) },
-                        onRegisterChildClick = {
-                            childDialogTarget = null
-                            showChildDialog = true
-                        },
+                        onRegisterChildClick = { showLinkInfoDialog = true },
                         onEditChildClick = { child ->
                             childDialogTarget = child
                             showChildDialog = true
@@ -166,6 +169,7 @@ fun ParentMainContainerScreen(
                 composable(ParentRoutes.CALENDAR) {
                     ParentCalendarScreen(
                         childCategory = selectedChild?.category.orEmpty(),
+                        events = calendarEvents,
                         onEventClick = { event ->
                             eventMessage = "${event.type.label} · ${event.day} ${event.month} ${event.time}\n" +
                                 "${event.title}\n${event.subtitle} · ${event.place}"
@@ -175,7 +179,9 @@ fun ParentMainContainerScreen(
 
                 composable(ParentRoutes.ANNOUNCEMENTS) {
                     ParentAnnouncementsScreen(
+                        announcements = announcements,
                         onAnnouncementClick = { announcement ->
+                            parentRepository.markAnnouncementAsRead(announcement.id)
                             eventMessage = "${announcement.title}\n\n${announcement.body}"
                         }
                     )
@@ -190,7 +196,7 @@ fun ParentMainContainerScreen(
                         onEditProfileClick = { showEditProfileDialog = true },
                         onNotificationsClick = { showNotificationsDialog = true },
                         onPrivacyClick = { navController.navigate(ParentRoutes.CHILDREN_PRIVACY_LIST) },
-                        onPaymentClick = { showPaymentDialog = true },
+                        onPaymentClick = { if (payment != null) showPaymentDialog = true },
                         onLogoutClick = onLogoutSuccess
                     )
                 }
@@ -241,6 +247,14 @@ fun ParentMainContainerScreen(
         )
     }
 
+    if (showLinkInfoDialog) {
+        SimpleInfoDialog(
+            title = "Vincular menor",
+            message = "La vinculación la realiza la academia/entrenador. Pide al entrenador que vincule al menor usando tu correo de apoderado:\n\n${guardian.email.ifBlank { "(correo no disponible)" }}\n\nCuando te vinculen, el menor aparecerá automáticamente en tu cuenta.",
+            onDismiss = { showLinkInfoDialog = false }
+        )
+    }
+
     if (showEditProfileDialog) {
         EditProfileDialog(
             profile = guardian,
@@ -264,12 +278,13 @@ fun ParentMainContainerScreen(
     }
 
     if (showPaymentDialog) {
-        PaymentStatusDialog(
-            payment = payment,
-            onDismiss = { showPaymentDialog = false },
-            onStatusChange = { status -> parentRepository.updatePaymentStatus(status) },
-            onUploadReceipt = { parentRepository.registerReceipt() }
-        )
+        payment?.let { currentPayment ->
+            PaymentStatusDialog(
+                payment = currentPayment,
+                onDismiss = { showPaymentDialog = false },
+                onUploadReceipt = { parentRepository.registerReceipt(currentPayment.playerId) }
+            )
+        }
     }
 
     if (showStatsDialog) {

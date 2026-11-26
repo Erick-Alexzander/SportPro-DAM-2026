@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Necesario para hablar con los emuladores locales por HTTP en builds de debug. -->
+    <application android:usesCleartextTraffic="true" />
+</manifest>

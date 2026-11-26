@@ -13,3 +13,15 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# Artefactos locales del emulador de Firebase
+/.firebase/
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+pubsub-debug.log
+database-debug.log
+functions/node_modules/
+functions/.env
+functions/.env.*
+

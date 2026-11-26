@@ -42,7 +42,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import devs.grupo5.sportpro.data.model.GuardianProfile
 import devs.grupo5.sportpro.data.model.LinkedChild
-import devs.grupo5.sportpro.data.model.MonthlyPayment
+import devs.grupo5.sportpro.data.model.ParentPayment
 import devs.grupo5.sportpro.presentation.parent.components.ParentDetailRow
 import devs.grupo5.sportpro.presentation.parent.components.ParentStatusPill
 import devs.grupo5.sportpro.presentation.parent.components.pressableClick
@@ -59,7 +59,7 @@ import devs.grupo5.sportpro.presentation.parent.theme.ParentTextSecondary
 fun ParentProfileScreen(
     guardian: GuardianProfile,
     children: List<LinkedChild> = emptyList(),
-    payment: MonthlyPayment = MonthlyPayment(),
+    payment: ParentPayment? = null,
     unreadNotifications: Int = 0,
     onEditProfileClick: () -> Unit = {},
     onNotificationsClick: () -> Unit = {},
@@ -118,9 +118,10 @@ fun ParentProfileScreen(
                 )
                 SettingsOptionItem(
                     icon = Icons.Default.CreditCard,
-                    title = "Mensualidad ${payment.period}",
-                    subtitle = "Estado: ${payment.status.label}",
-                    onClick = onPaymentClick
+                    title = payment?.let { "Mensualidad ${it.period}" } ?: "Mensualidad",
+                    subtitle = payment?.let { "Estado: ${it.status.label}" }
+                        ?: "Vincula a un menor para ver su estado",
+                    onClick = { if (payment != null) onPaymentClick() }
                 )
                 SettingsOptionItem(
                     icon = Icons.Default.Lock,
@@ -241,7 +242,7 @@ private fun ProfileHeaderCard(
 private fun AccountInfoCard(
     guardian: GuardianProfile,
     children: List<LinkedChild>,
-    payment: MonthlyPayment
+    payment: ParentPayment?
 ) {
     Card(
         modifier = Modifier
@@ -302,11 +303,19 @@ private fun AccountInfoCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Mensualidad ${payment.period}",
+                    text = payment?.let { "Mensualidad ${it.period}" } ?: "Mensualidad",
                     fontSize = 13.sp,
                     color = ParentTextMuted
                 )
-                ParentStatusPill(status = payment.status)
+                if (payment != null) {
+                    ParentStatusPill(status = payment.status)
+                } else {
+                    Text(
+                        text = "Sin menor vinculado",
+                        fontSize = 12.sp,
+                        color = ParentTextMuted
+                    )
+                }
             }
         }
     }

@@ -31,6 +31,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import devs.grupo5.sportpro.data.model.ParentAnnouncement
 import devs.grupo5.sportpro.presentation.parent.components.pressableClick
 import devs.grupo5.sportpro.presentation.parent.theme.ParentBorder
 import devs.grupo5.sportpro.presentation.parent.theme.ParentGreenContainer
@@ -43,7 +44,7 @@ import devs.grupo5.sportpro.presentation.parent.theme.ParentTextSecondary
 
 @Composable
 fun ParentAnnouncementsScreen(
-    announcements: List<ParentAnnouncement> = parentAnnouncements(),
+    announcements: List<ParentAnnouncement>,
     onAnnouncementClick: (ParentAnnouncement) -> Unit = {}
 ) {
     LazyColumn(
@@ -67,6 +68,33 @@ fun ParentAnnouncementsScreen(
                 color = ParentTextSecondary
             )
             Spacer(modifier = Modifier.height(6.dp))
+        }
+
+        if (announcements.isEmpty()) {
+            item {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .border(1.dp, ParentBorder, RoundedCornerShape(18.dp)),
+                    colors = CardDefaults.cardColors(containerColor = ParentSurface)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(
+                            text = "Sin comunicados por ahora",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = ParentTextPrimary
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Cuando la academia publique un anuncio aparecerá aquí.",
+                            fontSize = 13.sp,
+                            color = ParentTextSecondary,
+                            lineHeight = 19.sp
+                        )
+                    }
+                }
+            }
         }
 
         items(announcements, key = { it.id }) { announcement ->
@@ -131,6 +159,16 @@ private fun AnnouncementCard(
                         fontSize = 11.sp,
                         color = ParentTextMuted
                     )
+                }
+
+                if (!announcement.isRead) {
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .clip(CircleShape)
+                            .background(ParentNeonGreen)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
                 }
 
                 if (announcement.isImportant) {

@@ -51,10 +51,10 @@ import devs.grupo5.sportpro.presentation.parent.theme.ParentWarning
 @Composable
 fun ParentCalendarScreen(
     childCategory: String = "",
+    events: List<ParentEvent> = emptyList(),
     onEventClick: (ParentEvent) -> Unit = {}
 ) {
     var selectedFilter by remember { mutableStateOf(parentEventFilters.first()) }
-    val events = remember(childCategory) { parentEventsFor(childCategory) }
 
     val filteredEvents = when (selectedFilter) {
         "Entrenamientos" -> events.filter { it.type == ParentEventType.ENTRENAMIENTO }
