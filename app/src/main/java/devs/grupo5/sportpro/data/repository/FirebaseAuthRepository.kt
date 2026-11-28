@@ -1,7 +1,10 @@
 package devs.grupo5.sportpro.data.repository
 
+import android.util.Log
+import com.google.firebase.FirebaseNetworkException
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseAuthInvalidCredentialsException
+import com.google.firebase.auth.FirebaseAuthInvalidUserException
 import com.google.firebase.auth.FirebaseAuthUserCollisionException
 import com.google.firebase.auth.FirebaseAuthWeakPasswordException
 import com.google.firebase.auth.FirebaseUser
@@ -118,12 +121,19 @@ class FirebaseAuthRepository private constructor() : AuthRepository {
                 Result.failure(Exception("No se pudo autenticar al usuario."))
             }
         } catch (e: Exception) {
+            Log.e("FirebaseAuthRepo", "Error en inicio de sesión para: $email", e)
             // Si la lectura en Firestore falla por red, limpiamos si hay sesión residual
             if (auth.currentUser != null) {
                 auth.signOut()
                 _currentUser.value = null
             }
-            Result.failure(e)
+            val errorMsg = when (e) {
+                is FirebaseAuthInvalidUserException -> "No existe una cuenta registrada con este correo electrónico."
+                is FirebaseAuthInvalidCredentialsException -> "Credenciales incorrectas. Verifica tu correo y contraseña."
+                is FirebaseNetworkException -> "Error de conexión. Comprueba tu acceso a Internet e inténtalo nuevamente."
+                else -> e.message ?: "Credenciales incorrectas o error de autenticación."
+            }
+            Result.failure(Exception(errorMsg))
         }
     }
 
@@ -175,6 +185,7 @@ class FirebaseAuthRepository private constructor() : AuthRepository {
                 return Result.failure(Exception("Error al crear la cuenta de usuario."))
             }
         } catch (e: Exception) {
+            Log.e("FirebaseAuthRepo", "Error en registro de cuenta para: $normalizedEmail", e)
             var rollbackWarning = ""
             // Rollback: if user was created in Auth but Firestore write failed, delete the auth user
             if (firebaseUser != null) {
@@ -186,10 +197,11 @@ class FirebaseAuthRepository private constructor() : AuthRepository {
             }
             
             val errorMsg = when (e) {
-                is FirebaseAuthUserCollisionException -> "Este correo ya está registrado"
-                is FirebaseAuthWeakPasswordException -> "La contraseña es demasiado débil"
-                is FirebaseAuthInvalidCredentialsException -> "El formato del correo es inválido"
-                else -> e.message ?: "Error al registrar la cuenta"
+                is FirebaseAuthUserCollisionException -> "Este correo electrónico ya está registrado."
+                is FirebaseAuthWeakPasswordException -> "La contraseña es demasiado débil. Usa al menos 8 caracteres."
+                is FirebaseAuthInvalidCredentialsException -> "El formato del correo electrónico es inválido."
+                is FirebaseNetworkException -> "Error de conexión. Comprueba tu acceso a Internet e inténtalo nuevamente."
+                else -> e.message ?: "Error al registrar la cuenta."
             }
             return Result.failure(Exception(errorMsg + rollbackWarning))
         } finally {
