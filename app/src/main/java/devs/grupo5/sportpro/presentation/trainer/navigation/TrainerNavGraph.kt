@@ -15,6 +15,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import devs.grupo5.sportpro.presentation.auth.AuthViewModel
+import devs.grupo5.sportpro.presentation.trainer.announcements.TrainerAnnouncementsScreen
 import devs.grupo5.sportpro.presentation.trainer.community.CommunityScreen
 import devs.grupo5.sportpro.presentation.trainer.community.CommunityViewModel
 import devs.grupo5.sportpro.presentation.trainer.community.CreatePostScreen
@@ -70,6 +71,7 @@ object TrainerRoutes {
 
     const val COMMUNITY = "trainer_community"
     const val CREATE_POST = "create_post"
+    const val ANNOUNCEMENTS = "trainer_announcements"
 
     const val PROFILE = "trainer_profile"
 }
@@ -89,7 +91,7 @@ fun TrainerMainContainerScreen(
         currentRoute.startsWith(TrainerRoutes.PLAYERS) || currentRoute.startsWith("player_") -> TrainerTab.TEAMS
         currentRoute.startsWith(TrainerRoutes.TRAINING) || currentRoute.startsWith("training_") || currentRoute == TrainerRoutes.CREATE_TRAINING -> TrainerTab.TRAINING
         currentRoute.startsWith(TrainerRoutes.MATCHES) || currentRoute.startsWith("live_match") || currentRoute.startsWith("match_detail") || currentRoute.startsWith("ai_summary") || currentRoute.startsWith("publish_community") || currentRoute == TrainerRoutes.CREATE_MATCH -> TrainerTab.MATCHES
-        currentRoute.startsWith(TrainerRoutes.COMMUNITY) || currentRoute == TrainerRoutes.CREATE_POST -> TrainerTab.COMMUNITY
+        currentRoute.startsWith(TrainerRoutes.COMMUNITY) || currentRoute == TrainerRoutes.CREATE_POST || currentRoute == TrainerRoutes.ANNOUNCEMENTS -> TrainerTab.COMMUNITY
         currentRoute.startsWith(TrainerRoutes.PROFILE) -> TrainerTab.PROFILE
         else -> TrainerTab.DASHBOARD
     }
@@ -139,7 +141,8 @@ fun TrainerMainContainerScreen(
                     TeamsScreen(
                         viewModel = teamViewModel,
                         onCreateTeamClick = { navController.navigate(TrainerRoutes.CREATE_TEAM) },
-                        onTeamClick = { teamId -> navController.navigate("team_detail/$teamId") }
+                        onTeamClick = { teamId -> navController.navigate("team_detail/$teamId") },
+                        onPlayersClick = { navController.navigate(TrainerRoutes.PLAYERS) }
                     )
                 }
 
@@ -339,7 +342,8 @@ fun TrainerMainContainerScreen(
                 composable(TrainerRoutes.COMMUNITY) {
                     CommunityScreen(
                         viewModel = communityViewModel,
-                        onCreatePostClick = { navController.navigate(TrainerRoutes.CREATE_POST) }
+                        onCreatePostClick = { navController.navigate(TrainerRoutes.CREATE_POST) },
+                        onAnnouncementsClick = { navController.navigate(TrainerRoutes.ANNOUNCEMENTS) }
                     )
                 }
 
@@ -348,6 +352,17 @@ fun TrainerMainContainerScreen(
                         viewModel = communityViewModel,
                         onBackClick = { navController.popBackStack() },
                         onPostCreated = { navController.popBackStack() }
+                    )
+                }
+
+                composable(TrainerRoutes.ANNOUNCEMENTS) {
+                    val currentUser by authViewModel.currentUser.collectAsState()
+                    val authorName = if (currentUser != null) {
+                        "${currentUser?.firstName} ${currentUser?.lastName}".trim().ifBlank { "Entrenador" }
+                    } else "Entrenador"
+                    TrainerAnnouncementsScreen(
+                        authorName = authorName,
+                        onBackClick = { navController.popBackStack() }
                     )
                 }
 

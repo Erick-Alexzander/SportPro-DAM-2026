@@ -20,17 +20,28 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.LinkOff
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -39,8 +50,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.google.firebase.firestore.FieldValue
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.SetOptions
 import devs.grupo5.sportpro.data.model.Player
 import devs.grupo5.sportpro.presentation.trainer.teams.CategoryChip
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 import devs.grupo5.sportpro.presentation.trainer.theme.SportProCardBackground
 import devs.grupo5.sportpro.presentation.trainer.theme.SportProCardBorder
 import devs.grupo5.sportpro.presentation.trainer.theme.SportProDarkBackground
@@ -69,7 +85,8 @@ fun PlayersScreen(
                 player.position.contains(searchQuery, ignoreCase = true)
         matchesCategory && matchesSearch
     }
-
+    var selectedPlayerId by remember { mutableStateOf<String?>(null) }
+    val selectedPlayer = selectedPlayerId?.let { id -> players.find { it.id == id } }
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -184,21 +201,32 @@ fun PlayersScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     items(filteredPlayers, key = { it.id }) { player ->
-                        PlayerCard(player = player)
+                        PlayerCard(
+                            player = player,
+                            onClick = { selectedPlayerId = player.id }
+                        )
                     }
                 }
             }
+        }
+
+        selectedPlayer?.let { player ->
+            ManageGuardianDialog(
+                player = player,
+                onDismiss = { selectedPlayerId = null }
+            )
         }
     }
 }
 
 @Composable
-fun PlayerCard(player: Player) {
+fun PlayerCard(player: Player, onClick: () -> Unit = {}) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
-            .border(1.dp, SportProCardBorder, RoundedCornerShape(14.dp)),
+            .border(1.dp, SportProCardBorder, RoundedCornerShape(14.dp))
+            .clickable { onClick() },
         colors = CardDefaults.cardColors(containerColor = SportProCardBackground)
     ) {
         Row(
@@ -206,7 +234,7 @@ fun PlayerCard(player: Player) {
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
                 Box(
                     modifier = Modifier
                         .size(44.dp)
@@ -237,6 +265,13 @@ fun PlayerCard(player: Player) {
                         fontSize = 12.sp,
                         color = SportProTextSecondary
                     )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = if (player.guardianUids.isEmpty()) "Sin apoderado vinculado" else "Apoderados vinculados: ${player.guardianUids.size}",
+                        fontSize = 11.sp,
+                        color = if (player.guardianUids.isEmpty()) SportProTextMuted else SportProGreen,
+                        fontWeight = FontWeight.SemiBold
+                    )
                 }
             }
 
@@ -266,4 +301,226 @@ fun StatusChip(status: String) {
             fontWeight = FontWeight.Bold
         )
     }
+}
+
+@Composable
+fun ManageGuardianDialog(
+    player: Player,
+    onDismiss: () -> Unit
+) {
+    var email by remember { mutableStateOf("") }
+    var isLoading by remember { mutableStateOf(false) }
+    var statusMessage by remember { mutableStateOf<String?>(null) }
+    var isError by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    val firestore = remember { FirebaseFirestore.getInstance() }
+
+    fun linkGuardian() {
+        val trimmedEmail = email.trim().lowercase()
+        if (!trimmedEmail.contains("@")) return
+        isLoading = true
+        statusMessage = null
+        isError = false
+        scope.launch {
+            try {
+                val userQuery = firestore.collection("users")
+                    .whereEqualTo("email", trimmedEmail)
+                    .whereEqualTo("role", "PARENT")
+                    .limit(1)
+                    .get()
+                    .await()
+                val guardianDoc = userQuery.documents.firstOrNull()
+                    ?: throw IllegalStateException("No se encontró un apoderado con ese correo.")
+                val guardianUid = guardianDoc.id
+                if (player.guardianUids.contains(guardianUid)) {
+                    throw IllegalStateException("Este apoderado ya está vinculado al jugador.")
+                }
+
+                firestore.collection("players").document(player.id)
+                    .update("guardianUids", FieldValue.arrayUnion(guardianUid))
+                    .await()
+
+                val parentAccessRef = firestore.collection("parentAccess").document(guardianUid)
+                val accessData = mutableMapOf<String, Any>(
+                    "parentUid" to guardianUid,
+                    "playerIds" to FieldValue.arrayUnion(player.id)
+                )
+                val teamId = player.teamId
+                if (!teamId.isNullOrBlank()) {
+                    accessData["teamIds"] = FieldValue.arrayUnion(teamId)
+                } else {
+                    // Ensure teamIds exists on create; merge keeps existing on update
+                    val existing = parentAccessRef.get().await()
+                    if (!existing.exists()) accessData["teamIds"] = emptyList<String>()
+                }
+                parentAccessRef.set(accessData, SetOptions.merge()).await()
+
+                statusMessage = "Apoderado vinculado correctamente."
+                email = ""
+            } catch (e: Exception) {
+                isError = true
+                statusMessage = e.message ?: "Ocurrió un error al vincular."
+            } finally {
+                isLoading = false
+            }
+        }
+    }
+
+    fun unlinkGuardian(guardianUid: String) {
+        isLoading = true
+        statusMessage = null
+        isError = false
+        scope.launch {
+            try {
+                firestore.collection("players").document(player.id)
+                    .update("guardianUids", FieldValue.arrayRemove(guardianUid))
+                    .await()
+
+                val parentAccessRef = firestore.collection("parentAccess").document(guardianUid)
+                val accessSnap = parentAccessRef.get().await()
+                if (accessSnap.exists()) {
+                    val currentPlayerIds = (accessSnap.get("playerIds") as? List<*>)?.filterIsInstance<String>().orEmpty()
+                    val remainingPlayerIds = currentPlayerIds.filter { it != player.id }
+                    val remainingTeamIds = if (remainingPlayerIds.isEmpty()) {
+                        emptyList()
+                    } else {
+                        val teamIds = mutableSetOf<String>()
+                        for (pid in remainingPlayerIds) {
+                            val pSnap = firestore.collection("players").document(pid).get().await()
+                            val tid = pSnap.getString("teamId")
+                            if (!tid.isNullOrBlank()) teamIds.add(tid)
+                        }
+                        teamIds.toList()
+                    }
+                    parentAccessRef.set(
+                        mapOf(
+                            "parentUid" to guardianUid,
+                            "playerIds" to remainingPlayerIds,
+                            "teamIds" to remainingTeamIds
+                        )
+                    ).await()
+                }
+
+                statusMessage = "Apoderado desvinculado correctamente."
+            } catch (e: Exception) {
+                isError = true
+                statusMessage = e.message ?: "Ocurrió un error al desvincular."
+            } finally {
+                isLoading = false
+            }
+        }
+    }
+
+    AlertDialog(
+        onDismissRequest = { if (!isLoading) onDismiss() },
+        containerColor = SportProCardBackground,
+        titleContentColor = SportProTextPrimary,
+        textContentColor = SportProTextSecondary,
+        title = {
+            Text(
+                text = "Apoderados: ${player.fullName}",
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold
+            )
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    text = "Vincula un apoderado por correo. Solo cuentas con rol PARENT pueden vincularse.",
+                    fontSize = 12.sp,
+                    color = SportProTextSecondary
+                )
+
+                if (player.guardianUids.isEmpty()) {
+                    Text(
+                        text = "Este jugador no tiene apoderados vinculados.",
+                        fontSize = 12.sp,
+                        color = SportProTextMuted
+                    )
+                } else {
+                    Text(
+                        text = "Vinculados:",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = SportProTextPrimary
+                    )
+                    player.guardianUids.forEach { guardianUid ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = guardianUid,
+                                fontSize = 11.sp,
+                                color = SportProTextSecondary,
+                                modifier = Modifier.weight(1f)
+                            )
+                            TextButton(
+                                enabled = !isLoading,
+                                onClick = { unlinkGuardian(guardianUid) }
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.LinkOff,
+                                    contentDescription = "Desvincular",
+                                    tint = SportProWarning,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Desvincular", color = SportProWarning, fontSize = 12.sp)
+                            }
+                        }
+                    }
+                }
+
+                OutlinedTextField(
+                    value = email,
+                    onValueChange = { email = it; statusMessage = null },
+                    label = { Text("Correo del apoderado") },
+                    placeholder = { Text("apoderado@ejemplo.com") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedContainerColor = SportProDarkBackground,
+                        unfocusedContainerColor = SportProDarkBackground,
+                        focusedBorderColor = SportProGreen,
+                        unfocusedBorderColor = SportProCardBorder,
+                        focusedTextColor = SportProTextPrimary,
+                        unfocusedTextColor = SportProTextPrimary,
+                        focusedLabelColor = SportProGreen,
+                        unfocusedLabelColor = SportProTextMuted
+                    )
+                )
+
+                if (statusMessage != null) {
+                    val color = if (isError) SportProWarning else SportProGreen
+                    Text(
+                        text = statusMessage!!,
+                        fontSize = 12.sp,
+                        color = color
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                enabled = !isLoading && email.contains("@"),
+                onClick = { linkGuardian() },
+                colors = ButtonDefaults.buttonColors(containerColor = SportProGreen, contentColor = Color.Black)
+            ) {
+                if (isLoading) {
+                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = Color.Black)
+                    Spacer(modifier = Modifier.width(8.dp))
+                }
+                Icon(Icons.Default.Link, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("Vincular", fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            TextButton(enabled = !isLoading, onClick = onDismiss) {
+                Text("Cerrar", color = SportProTextMuted)
+            }
+        }
+    )
 }

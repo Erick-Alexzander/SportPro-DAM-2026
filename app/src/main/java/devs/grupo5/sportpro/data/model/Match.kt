@@ -34,7 +34,6 @@ data class Match(
     val stadium: String = "",
     val category: String = "", // "Primera", "Sub-15", "Sub-10"
     val status: String = "Programado", // "Programado", "En vivo", "Finalizado"
-
     @get:PropertyName("isHome")
     @set:PropertyName("isHome")
     var isHome: Boolean = true, // true: Local, false: Visitante
@@ -46,7 +45,6 @@ data class Match(
     @get:PropertyName("isPaused")
     @set:PropertyName("isPaused")
     var isPaused: Boolean = false,
-
     val events: List<MatchEvent> = emptyList(),
     val aiSummary: AiSummary? = null
 )

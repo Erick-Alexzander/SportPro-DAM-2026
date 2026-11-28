@@ -156,7 +156,18 @@ class FirebaseAuthRepository private constructor() : AuthRepository {
                     birthDate = birthDate
                 )
                 // Save profile to Firestore collection "users/{uid}"
-                firestore.collection("users").document(firebaseUser.uid).set(userProfile).await()
+                val userData = mutableMapOf<String, Any?>(
+                    "uid" to userProfile.uid,
+                    "firstName" to userProfile.firstName,
+                    "lastName" to userProfile.lastName,
+                    "email" to userProfile.email,
+                    "role" to userProfile.role.name,
+                    "birthDate" to userProfile.birthDate
+                )
+                if (role == UserRole.PLAYER) {
+                    userData["playerProfile"] = hashMapOf<String, Any?>()
+                }
+                firestore.collection("users").document(firebaseUser.uid).set(userData).await()
                 _currentUser.value = userProfile
                 return Result.success(userProfile)
             } else {

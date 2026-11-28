@@ -40,7 +40,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import devs.grupo5.sportpro.data.model.GuardianProfile
 import devs.grupo5.sportpro.data.model.LinkedChild
-import devs.grupo5.sportpro.data.model.MonthlyPayment
+import devs.grupo5.sportpro.data.model.ParentPayment
 import devs.grupo5.sportpro.presentation.parent.components.ParentChildSelector
 import devs.grupo5.sportpro.presentation.parent.components.ParentEmptyState
 import devs.grupo5.sportpro.presentation.parent.components.ParentMetricTile
@@ -62,7 +62,7 @@ fun ParentHomeScreen(
     guardian: GuardianProfile,
     child: LinkedChild?,
     children: List<LinkedChild> = emptyList(),
-    payment: MonthlyPayment,
+    payment: ParentPayment?,
     unreadNotifications: Int = 0,
     onNotificationsClick: () -> Unit = {},
     onRegisterChildClick: () -> Unit = {},
@@ -114,6 +114,7 @@ fun ParentHomeScreen(
         item {
             PaymentStatusCard(
                 payment = payment,
+                hasLinkedChild = child != null,
                 onClick = onPaymentClick
             )
         }
@@ -428,7 +429,8 @@ private fun RegisterChildBanner(
 
 @Composable
 private fun PaymentStatusCard(
-    payment: MonthlyPayment,
+    payment: ParentPayment?,
+    hasLinkedChild: Boolean,
     onClick: () -> Unit
 ) {
     Card(
@@ -462,23 +464,28 @@ private fun PaymentStatusCard(
 
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "Mensualidad ${payment.period}",
+                    text = payment?.let { "Mensualidad ${it.period}" } ?: "Mensualidad",
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Bold,
                     color = ParentTextPrimary
                 )
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
-                    text = "SportPro no procesa pagos · Solo registro de estado",
+                    text = when {
+                        payment != null -> "SportPro no procesa pagos · Solo registro de estado"
+                        hasLinkedChild -> "No hay mensualidad registrada para este período"
+                        else -> "Vincula a un menor para ver su mensualidad"
+                    },
                     fontSize = 11.sp,
                     color = ParentTextMuted,
                     lineHeight = 16.sp
                 )
             }
 
-            Spacer(modifier = Modifier.width(10.dp))
-
-            ParentStatusPill(status = payment.status)
+            if (payment != null) {
+                Spacer(modifier = Modifier.width(10.dp))
+                ParentStatusPill(status = payment.status)
+            }
         }
     }
 }

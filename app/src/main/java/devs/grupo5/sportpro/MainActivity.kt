@@ -10,6 +10,7 @@ import devs.grupo5.sportpro.ui.theme.SportProTheme
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        FirebaseEmulator.configureIfDebug()
         enableEdgeToEdge()
         setContent {
             SportProTheme(darkTheme = true, dynamicColor = false) {

@@ -56,7 +56,8 @@ import devs.grupo5.sportpro.presentation.trainer.theme.SportProTextSecondary
 fun TeamsScreen(
     viewModel: TeamViewModel = viewModel(),
     onCreateTeamClick: () -> Unit = {},
-    onTeamClick: (String) -> Unit = {}
+    onTeamClick: (String) -> Unit = {},
+    onPlayersClick: () -> Unit = {}
 ) {
     val teams by viewModel.teams.collectAsState()
 
@@ -91,14 +92,23 @@ fun TeamsScreen(
                     )
                 }
 
-                FloatingActionButton(
-                    onClick = onCreateTeamClick,
-                    containerColor = SportProGreen,
-                    contentColor = Color.Black,
-                    shape = CircleShape,
-                    modifier = Modifier.size(48.dp)
-                ) {
-                    Icon(imageVector = Icons.Default.Add, contentDescription = "Nuevo equipo")
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = onPlayersClick) {
+                        Icon(
+                            imageVector = Icons.Default.Person,
+                            contentDescription = "Jugadores",
+                            tint = SportProGreen
+                        )
+                    }
+                    FloatingActionButton(
+                        onClick = onCreateTeamClick,
+                        containerColor = SportProGreen,
+                        contentColor = Color.Black,
+                        shape = CircleShape,
+                        modifier = Modifier.size(48.dp)
+                    ) {
+                        Icon(imageVector = Icons.Default.Add, contentDescription = "Nuevo equipo")
+                    }
                 }
             }
 

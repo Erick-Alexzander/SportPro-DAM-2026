@@ -3,6 +3,7 @@ package devs.grupo5.sportpro.data.repository
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
+import com.google.firebase.firestore.SetOptions
 import devs.grupo5.sportpro.data.model.Player
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -67,6 +68,37 @@ class FirebasePlayerRepository private constructor() : PlayerRepository {
         return _players.value.filter { it.id in ids }
     }
 
+    private fun playerCreateData(player: Player): HashMap<String, Any?> {
+        val data = hashMapOf<String, Any?>(
+            "id" to player.id,
+            "ownerUid" to player.ownerUid,
+            "fullName" to player.fullName,
+            "category" to player.category,
+            "position" to player.position,
+            "jerseyNumber" to player.jerseyNumber,
+            "age" to player.age,
+            "status" to player.status,
+            "dateOfBirth" to player.dateOfBirth,
+            "contactEmail" to player.contactEmail,
+            "dominantFoot" to player.dominantFoot,
+            "size" to player.size,
+            "weight" to player.weight,
+            "parentName" to player.parentName,
+            "parentRelation" to player.parentRelation,
+            "parentPhone" to player.parentPhone,
+            "emergencyPhone" to player.emergencyPhone,
+            "privacySettings" to hashMapOf(
+                "profilePhoto" to player.privacySettings.profilePhoto,
+                "fullNameVisibility" to player.privacySettings.fullNameVisibility,
+                "statsVisibility" to player.privacySettings.statsVisibility
+            ),
+            "guardianUids" to player.guardianUids
+        )
+        player.teamId?.let { data["teamId"] = it }
+        player.linkedAuthId?.let { data["linkedAuthId"] = it }
+        return data
+    }
+
     override suspend fun addPlayer(player: Player): Result<Unit> {
         val uid = auth.currentUser?.uid ?: return Result.failure(Exception("Usuario no autenticado"))
 
@@ -76,7 +108,7 @@ class FirebasePlayerRepository private constructor() : PlayerRepository {
                 id = docRef.id,
                 ownerUid = uid
             )
-            docRef.set(finalPlayer).await()
+            docRef.set(playerCreateData(finalPlayer)).await()
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
@@ -110,7 +142,7 @@ class FirebasePlayerRepository private constructor() : PlayerRepository {
                 )
 
                 // 3. Escritura del jugador
-                transaction.set(playerRef, finalPlayer)
+                transaction.set(playerRef, playerCreateData(finalPlayer))
 
                 // 4. Actualización del equipo
                 val currentPlayerIds = teamSnapshot.get("playerIds") as? List<*> ?: emptyList<Any>()
@@ -147,7 +179,14 @@ class FirebasePlayerRepository private constructor() : PlayerRepository {
                     throw Exception("No tienes permisos para modificar este jugador")
                 }
 
-                transaction.set(docRef, player)
+                // No reescribir guardianUids: solo la Cloud Function puede gestionar los vínculos.
+                val editableFields = listOf(
+                    "teamId", "fullName", "category", "position", "jerseyNumber",
+                    "age", "status", "dateOfBirth", "contactEmail", "dominantFoot",
+                    "size", "weight", "parentName", "parentRelation", "parentPhone",
+                    "emergencyPhone", "privacySettings"
+                )
+                transaction.set(docRef, player, SetOptions.mergeFields(editableFields))
             }.await()
             Result.success(Unit)
         } catch (e: Exception) {

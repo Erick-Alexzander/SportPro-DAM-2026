@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Groups
+import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Refresh
@@ -104,7 +105,6 @@ fun TeamDetailScreen(
     val teamPlayers = viewModel.getTeamPlayers(team)
     val teamTrainings = viewModel.getTeamTrainings(team.id)
     val teamMatches = viewModel.getTeamMatches(team.id)
-
     val playerLinkViewModel: PlayerLinkViewModel = viewModel()
     val linkStatuses by playerLinkViewModel.playerLinkStatuses.collectAsState()
 

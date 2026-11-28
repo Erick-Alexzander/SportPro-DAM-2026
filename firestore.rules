@@ -20,6 +20,12 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "PLAYER";
     }
 
+    function isParent() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "PARENT";
+    }
+
     function isAdmin() {
       return signedIn()
         && exists(/databases/$(database)/documents/users/$(request.auth.uid))
@@ -34,13 +40,25 @@ service cloud.firestore {
       return !(field in request.resource.data.diff(resource.data).affectedKeys());
     }
 
+    function isLinkedGuardian(data) {
+      return isParent()
+        && data.get('guardianUids', []).hasAny([request.auth.uid]);
+    }
+
+    function isParentLinkedToTeam(teamId) {
+      return isParent()
+        && exists(/databases/$(database)/documents/parentAccess/$(request.auth.uid))
+        && get(/databases/$(database)/documents/parentAccess/$(request.auth.uid)).data.get('teamIds', []).hasAny([teamId]);
+    }
+
     // --- REGLAS PARA USUARIOS (PERFILES) ---
 
     match /users/{userId} {
       allow get: if signedIn()
-        && request.auth.uid == userId;
+        && (request.auth.uid == userId || isTrainer());
 
-      allow list: if isAdmin();
+      // Los entrenadores necesitan buscar apoderados por correo para vincularlos sin Cloud Functions.
+      allow list: if isTrainer() || isAdmin();
 
       allow create: if signedIn()
         && request.auth.uid == userId
@@ -98,7 +116,7 @@ service cloud.firestore {
 
     match /teams/{teamId} {
       allow get, list: if signedIn()
-        && resource.data.ownerUid == request.auth.uid;
+        && (resource.data.ownerUid == request.auth.uid || isParentLinkedToTeam(teamId));
 
       allow create: if isTrainer()
         && request.resource.data.keys().hasAll([
@@ -156,7 +174,10 @@ service cloud.firestore {
 
     match /players/{playerId} {
       allow get, list: if signedIn()
-        && resource.data.ownerUid == request.auth.uid;
+        && (
+          resource.data.ownerUid == request.auth.uid ||
+          isLinkedGuardian(resource.data)
+        );
 
       allow create: if isTrainer()
         && request.resource.data.ownerUid == request.auth.uid
@@ -165,8 +186,11 @@ service cloud.firestore {
         && request.resource.data.keys().hasOnly([
             'id', 'ownerUid', 'teamId', 'fullName', 'category', 'position', 'jerseyNumber',
             'age', 'status', 'dateOfBirth', 'contactEmail', 'dominantFoot', 'size', 'weight',
-            'parentName', 'parentRelation', 'parentPhone', 'emergencyPhone', 'privacySettings'
+            'parentName', 'parentRelation', 'parentPhone', 'emergencyPhone', 'privacySettings',
+            'guardianUids', 'linkedAuthId'
         ])
+        && request.resource.data.get('guardianUids', []) == []
+        && (!('linkedAuthId' in request.resource.data) || request.resource.data.get('linkedAuthId', null) == null)
         && (
             !request.resource.data.keys().hasAny(['teamId']) ||
             request.resource.data.get('teamId', null) == null ||
@@ -176,38 +200,146 @@ service cloud.firestore {
             )
         );
 
-      allow update: if isTrainer()
-        && resource.data.ownerUid == request.auth.uid
-        && isImmutable('ownerUid')
-        && isImmutable('id')
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-            'teamId', 'fullName', 'category', 'position', 'jerseyNumber', 'age', 'status',
-            'dateOfBirth', 'contactEmail', 'dominantFoot', 'size', 'weight',
-            'parentName', 'parentRelation', 'parentPhone', 'emergencyPhone',
-            'privacySettings'
-        ])
-        && (
-            isImmutable('teamId') ||
-            (
-                request.resource.data.get('teamId', null) == null &&
-                resource.data.get('teamId', null) != null &&
-                !(playerId in getAfter(/databases/$(database)/documents/teams/$(resource.data.teamId)).data.playerIds)
-            ) ||
-            (
-                request.resource.data.get('teamId', null) != null &&
-                resource.data.get('teamId', null) == null &&
-                getAfter(/databases/$(database)/documents/teams/$(request.resource.data.teamId)).data.ownerUid == request.auth.uid &&
-                playerId in getAfter(/databases/$(database)/documents/teams/$(request.resource.data.teamId)).data.playerIds
-            )
+      allow update: if
+        // Trainer owner: update normal de campos del jugador (sin guardianUids/linkedAuthId)
+        (
+          isTrainer()
+          && resource.data.ownerUid == request.auth.uid
+          && isImmutable('ownerUid')
+          && isImmutable('id')
+          && isImmutable('guardianUids')
+          && isImmutable('linkedAuthId')
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'teamId', 'fullName', 'category', 'position', 'jerseyNumber', 'age', 'status',
+              'dateOfBirth', 'contactEmail', 'dominantFoot', 'size', 'weight',
+              'parentName', 'parentRelation', 'parentPhone', 'emergencyPhone',
+              'privacySettings'
+          ])
+          && (
+              isImmutable('teamId') ||
+              (
+                  request.resource.data.get('teamId', null) == null &&
+                  resource.data.get('teamId', null) != null &&
+                  !(playerId in getAfter(/databases/$(database)/documents/teams/$(resource.data.teamId)).data.playerIds)
+              ) ||
+              (
+                  request.resource.data.get('teamId', null) != null &&
+                  resource.data.get('teamId', null) == null &&
+                  getAfter(/databases/$(database)/documents/teams/$(request.resource.data.teamId)).data.ownerUid == request.auth.uid &&
+                  playerId in getAfter(/databases/$(database)/documents/teams/$(request.resource.data.teamId)).data.playerIds
+              )
+          )
+        )
+        ||
+        // Trainer owner: vincular/desvincular apoderado (solo guardianUids)
+        (
+          isTrainer()
+          && resource.data.ownerUid == request.auth.uid
+          && isImmutable('ownerUid')
+          && isImmutable('id')
+          && isImmutable('linkedAuthId')
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['guardianUids'])
+          && request.resource.data.guardianUids is list
+          && (
+              // Agregar exactamente 1 apoderado
+              (
+                request.resource.data.guardianUids.size() == resource.data.get('guardianUids', []).size() + 1
+                && request.resource.data.guardianUids.hasAll(resource.data.get('guardianUids', []))
+                && request.resource.data.guardianUids.removeAll(resource.data.get('guardianUids', [])).size() == 1
+                && exists(/databases/$(database)/documents/users/$(request.resource.data.guardianUids.removeAll(resource.data.get('guardianUids', []))[0]))
+                && get(/databases/$(database)/documents/users/$(request.resource.data.guardianUids.removeAll(resource.data.get('guardianUids', []))[0])).data.role == 'PARENT'
+              )
+              ||
+              // Quitar exactamente 1 apoderado
+              (
+                request.resource.data.guardianUids.size() == resource.data.get('guardianUids', []).size() - 1
+                && resource.data.get('guardianUids', []).hasAll(request.resource.data.guardianUids)
+              )
+          )
+        )
+        ||
+        // Apoderado vinculado: puede quitarse a sí mismo del vínculo
+        (
+          isParent()
+          && isLinkedGuardian(resource.data)
+          && isImmutable('ownerUid')
+          && isImmutable('id')
+          && isImmutable('linkedAuthId')
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['guardianUids'])
+          && request.resource.data.guardianUids is list
+          && request.resource.data.guardianUids.size() == resource.data.get('guardianUids', []).size() - 1
+          && resource.data.get('guardianUids', []).hasAll(request.resource.data.guardianUids)
+          && resource.data.get('guardianUids', []).removeAll(request.resource.data.guardianUids)[0] == request.auth.uid
+        )
+        ||
+        // Apoderado vinculado: establecer linkedAuthId una sola vez (crear acceso menor)
+        (
+          isParent()
+          && isLinkedGuardian(resource.data)
+          && isImmutable('ownerUid')
+          && isImmutable('id')
+          && isImmutable('guardianUids')
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['linkedAuthId'])
+          && (!('linkedAuthId' in resource.data) || resource.data.get('linkedAuthId', '') == '' || resource.data.get('linkedAuthId', null) == null)
+          && request.resource.data.linkedAuthId is string
+          && request.resource.data.linkedAuthId.size() > 0
+          && exists(/databases/$(database)/documents/users/$(request.resource.data.linkedAuthId))
+          && get(/databases/$(database)/documents/users/$(request.resource.data.linkedAuthId)).data.role == 'PLAYER'
+        )
+        ||
+        // Apoderado vinculado: actualizar privacidad/contacto/datos físicos permitidos
+        (
+          isParent()
+          && isLinkedGuardian(resource.data)
+          && isImmutable('ownerUid')
+          && isImmutable('id')
+          && isImmutable('guardianUids')
+          && isImmutable('linkedAuthId')
+          && isImmutable('teamId')
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'privacySettings', 'parentPhone', 'emergencyPhone',
+            'dateOfBirth', 'age', 'weight'
+          ])
         );
 
       allow delete: if false;
     }
 
+    // --- ACCESO DE APODERADOS ---
+    // El entrenador gestiona vínculos; el apoderado solo lee su propio documento.
+    // La autorización real de lectura de jugadores se valida en players.guardianUids.
+    match /parentAccess/{parentUid} {
+      allow get: if signedIn()
+        && (
+          (isParent() && request.auth.uid == parentUid)
+          || isTrainer()
+        );
+
+      allow create, update: if isTrainer()
+        && request.resource.data.keys().hasOnly(['parentUid', 'playerIds', 'teamIds'])
+        && request.resource.data.parentUid == parentUid
+        && request.resource.data.playerIds is list
+        && request.resource.data.teamIds is list
+        && exists(/databases/$(database)/documents/users/$(parentUid))
+        && get(/databases/$(database)/documents/users/$(parentUid)).data.role == 'PARENT';
+
+      // Apoderado: puede quitar vínculos de su propio documento (solo remover IDs)
+      allow update: if isParent()
+        && request.auth.uid == parentUid
+        && request.resource.data.keys().hasOnly(['parentUid', 'playerIds', 'teamIds'])
+        && request.resource.data.parentUid == parentUid
+        && request.resource.data.playerIds is list
+        && request.resource.data.teamIds is list
+        && resource.data.playerIds.hasAll(request.resource.data.playerIds)
+        && resource.data.teamIds.hasAll(request.resource.data.teamIds);
+
+      allow list, delete: if false;
+    }
+
     // --- REGLAS PARA ENTRENAMIENTOS ---
 
     match /trainings/{trainingId} {
-      allow get, list: if isOwner(resource.data);
+      allow get, list: if isOwner(resource.data) || isParentLinkedToTeam(resource.data.teamId);
 
       allow create: if isTrainer()
         && request.resource.data.ownerUid == request.auth.uid
@@ -245,7 +377,7 @@ service cloud.firestore {
     // --- REGLAS PARA PARTIDOS ---
 
     match /matches/{matchId} {
-      allow get, list: if isOwner(resource.data);
+      allow get, list: if isOwner(resource.data) || isParentLinkedToTeam(resource.data.teamId);
 
       allow create: if isTrainer()
         && request.resource.data.ownerUid == request.auth.uid
@@ -424,31 +556,68 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
-    match /payments/{guardianUid} {
-      function isGuardianOwner() {
-        return signedIn() && request.auth.uid == guardianUid;
-      }
+    // --- MENSUALIDADES ---
+    // El apoderado solo lee las suyas y ?nicamente puede registrar su comprobante.
+    // El estado PENDIENTE/PAGADO lo define la academia: status es inmutable para el cliente.
+    match /payments/{paymentId} {
+      allow get, list: if signedIn()
+        && (
+          (isParent() && resource.data.parentUid == request.auth.uid)
+          ||
+          (isTrainer() && resource.data.get('ownerUid', '') == request.auth.uid)
+        );
 
-      allow get: if isGuardianOwner() || isAdmin();
-      allow list: if isAdmin();
+      allow create: if false;
 
-      allow create: if (isGuardianOwner()
-        && request.resource.data.keys().hasOnly(['period', 'status', 'receiptRegistered'])
-        && request.resource.data.status == 'PENDIENTE'
-        && request.resource.data.receiptRegistered == true)
-        || (isAdmin()
-        && request.resource.data.keys().hasOnly(['period', 'status', 'updatedBy', 'updatedAt'])
-        && request.resource.data.status in ['PENDIENTE', 'PAGADO']);
-
-      allow update: if (isGuardianOwner()
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['receiptRegistered'])
-        && isImmutable('status')
-        && isImmutable('period'))
-        || (isAdmin()
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['period', 'status', 'updatedBy', 'updatedAt'])
-        && request.resource.data.status in ['PENDIENTE', 'PAGADO']);
+      allow update: if isParent()
+        && resource.data.parentUid == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'receiptRegistered', 'receiptUrl', 'updatedAt', 'updatedBy'
+        ])
+        && request.resource.data.status == resource.data.status
+        && request.resource.data.playerId == resource.data.playerId
+        && request.resource.data.parentUid == resource.data.parentUid
+        && request.resource.data.receiptRegistered == true;
 
       allow delete: if false;
+    }
+
+    // --- COMUNICADOS ---
+    // Lectura para apoderados/entrenadores; publicaci?n por entrenador due?o.
+    match /announcements/{announcementId} {
+      allow get, list: if signedIn()
+        && (
+          resource.data.audience == 'TODOS'
+          ||
+          (isParent() && resource.data.audience == 'APODERADOS')
+          ||
+          (isTrainer() && resource.data.get('authorUid', '') == request.auth.uid)
+        );
+
+      allow create: if isTrainer()
+        && request.resource.data.keys().hasAll(['authorUid', 'author', 'audience', 'title', 'body', 'createdAt', 'pinned'])
+        && request.resource.data.keys().hasOnly(['authorUid', 'author', 'teamId', 'audience', 'title', 'body', 'createdAt', 'pinned'])
+        && request.resource.data.authorUid == request.auth.uid
+        && request.resource.data.author is string
+        && request.resource.data.title is string
+        && request.resource.data.title.size() > 0
+        && request.resource.data.body is string
+        && request.resource.data.audience in ['TODOS', 'APODERADOS', 'JUGADORES']
+        && request.resource.data.pinned is bool;
+
+      allow update: if isTrainer()
+        && resource.data.authorUid == request.auth.uid
+        && isImmutable('authorUid')
+        && isImmutable('createdAt')
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['author', 'teamId', 'audience', 'title', 'body', 'pinned'])
+        && request.resource.data.title is string
+        && request.resource.data.title.size() > 0
+        && request.resource.data.body is string
+        && request.resource.data.audience in ['TODOS', 'APODERADOS', 'JUGADORES']
+        && request.resource.data.pinned is bool;
+
+      allow delete: if isTrainer()
+        && resource.data.authorUid == request.auth.uid;
     }
   }
 }
