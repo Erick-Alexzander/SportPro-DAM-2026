@@ -111,6 +111,7 @@ class FirebasePlayerRepository private constructor() : PlayerRepository {
             docRef.set(playerCreateData(finalPlayer)).await()
             Result.success(Unit)
         } catch (e: Exception) {
+            android.util.Log.e("FirebasePlayerRepo", "addPlayer failed uid=$uid dataKeys=${playerCreateData(player.copy(id="x", ownerUid=uid)).keys}", e)
             Result.failure(e)
         }
     }
@@ -144,21 +145,24 @@ class FirebasePlayerRepository private constructor() : PlayerRepository {
                 // 3. Escritura del jugador
                 transaction.set(playerRef, playerCreateData(finalPlayer))
 
-                // 4. Actualización del equipo
+                // 4. Actualización del equipo (una sola escritura: las reglas exigen
+                // que playerCount == playerIds.size en cada update).
                 val currentPlayerIds = teamSnapshot.get("playerIds") as? List<*> ?: emptyList<Any>()
                 if (!currentPlayerIds.contains(playerRef.id)) {
                     val updatedPlayerIds = currentPlayerIds.toMutableList()
                     updatedPlayerIds.add(playerRef.id)
-                    
-                    transaction.update(teamRef, "playerIds", updatedPlayerIds)
-                    
-                    // Solo incrementamos si realmente lo agregamos
-                    val currentCount = teamSnapshot.getLong("playerCount") ?: currentPlayerIds.size.toLong()
-                    transaction.update(teamRef, "playerCount", currentCount + 1)
+                    transaction.update(
+                        teamRef,
+                        mapOf(
+                            "playerIds" to updatedPlayerIds,
+                            "playerCount" to updatedPlayerIds.size.toLong()
+                        )
+                    )
                 }
             }.await()
             Result.success(Unit)
         } catch (e: Exception) {
+            android.util.Log.e("FirebasePlayerRepo", "addPlayerWithTeam failed uid=$uid teamId=$teamId", e)
             Result.failure(e)
         }
     }

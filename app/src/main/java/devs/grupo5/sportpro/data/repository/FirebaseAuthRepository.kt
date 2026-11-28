@@ -156,7 +156,8 @@ class FirebaseAuthRepository private constructor() : AuthRepository {
                     birthDate = birthDate
                 )
                 // Save profile to Firestore collection "users/{uid}"
-                val userData = mutableMapOf<String, Any?>(
+                // No enviar playerProfile para roles no-PLAYER: las reglas lo rechazan.
+                val data = hashMapOf<String, Any?>(
                     "uid" to userProfile.uid,
                     "firstName" to userProfile.firstName,
                     "lastName" to userProfile.lastName,
@@ -165,9 +166,9 @@ class FirebaseAuthRepository private constructor() : AuthRepository {
                     "birthDate" to userProfile.birthDate
                 )
                 if (role == UserRole.PLAYER) {
-                    userData["playerProfile"] = hashMapOf<String, Any?>()
+                    data["playerProfile"] = userProfile.playerProfile
                 }
-                firestore.collection("users").document(firebaseUser.uid).set(userData).await()
+                firestore.collection("users").document(firebaseUser.uid).set(data).await()
                 _currentUser.value = userProfile
                 return Result.success(userProfile)
             } else {
